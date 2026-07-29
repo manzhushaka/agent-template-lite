@@ -1,4 +1,4 @@
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { count, desc, eq, inArray, like, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { knowledgeDocuments } from "@/db/schema";
@@ -6,13 +6,41 @@ import { audit } from "@/lib/audit";
 import { requestKnowledgeReindex } from "@/lib/agentos";
 import { readSession } from "@/lib/auth";
 import { db } from "@/lib/db";
+import {
+  paginationInput,
+  paginationMeta,
+  paginationOffset,
+  paginationSchema,
+  type PaginationQuery,
+} from "@/lib/pagination";
 
 const schema = z.object({
   id: z.coerce.number().int().positive().optional(), title: z.string().trim().min(1).max(200), category: z.string().trim().min(1).max(80),
   content: z.string().trim().min(20).max(100_000), source: z.string().trim().min(1).max(200), status: z.enum(["DRAFT", "PUBLISHED"]),
 });
 
-async function items() { return db.select().from(knowledgeDocuments).orderBy(desc(knowledgeDocuments.updatedAt)); }
+async function listKnowledge(query: string, pagination: PaginationQuery) {
+  const term = query.trim();
+  const condition = term
+    ? or(
+        like(knowledgeDocuments.title, `%${term}%`),
+        like(knowledgeDocuments.category, `%${term}%`),
+        like(knowledgeDocuments.source, `%${term}%`),
+      )
+    : undefined;
+  const [[totalRow], items] = await Promise.all([
+    db.select({ value: count() }).from(knowledgeDocuments).where(condition),
+    db
+      .select()
+      .from(knowledgeDocuments)
+      .where(condition)
+      .orderBy(desc(knowledgeDocuments.updatedAt), desc(knowledgeDocuments.id))
+      .limit(pagination.pageSize)
+      .offset(paginationOffset(pagination)),
+  ]);
+  const total = Number(totalRow.value);
+  return { items, pagination: paginationMeta(pagination, total) };
+}
 
 async function reindexPublished(): Promise<{ ok: boolean; message: string }> {
   try {
@@ -24,9 +52,15 @@ async function reindexPublished(): Promise<{ ok: boolean; message: string }> {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!await readSession()) return NextResponse.json({ message: "未登录" }, { status: 401 });
-  return NextResponse.json({ items: await items() });
+  const url = new URL(request.url);
+  const pagination = paginationSchema.safeParse(paginationInput(url.searchParams));
+  const query = z.string().trim().max(200).safeParse(url.searchParams.get("q") || "");
+  if (!pagination.success || !query.success) {
+    return NextResponse.json({ message: "分页或搜索参数无效" }, { status: 400 });
+  }
+  return NextResponse.json(await listKnowledge(query.data, pagination.data));
 }
 
 export async function POST(request: Request) {
@@ -37,7 +71,7 @@ export async function POST(request: Request) {
   const [result] = await db.insert(knowledgeDocuments).values({ ...parsed.data, indexStatus: "PENDING" });
   await audit(user, { action: "CREATE", resourceType: "knowledge_document", resourceId: String(result.insertId), detail: { title: parsed.data.title } });
   const indexing = parsed.data.status === "PUBLISHED" ? await reindexPublished() : { ok: true, message: "草稿未进入索引" };
-  return NextResponse.json({ items: await items(), indexing }, { status: 201 });
+  return NextResponse.json({ id: Number(result.insertId), indexing }, { status: 201 });
 }
 
 export async function PUT(request: Request) {
@@ -49,7 +83,7 @@ export async function PUT(request: Request) {
   await db.update(knowledgeDocuments).set({ ...value, version: sql`${knowledgeDocuments.version} + 1`, indexStatus: "PENDING" }).where(eq(knowledgeDocuments.id, id));
   await audit(user, { action: "UPDATE", resourceType: "knowledge_document", resourceId: String(id), detail: { title: value.title } });
   const indexing = value.status === "PUBLISHED" ? await reindexPublished() : { ok: true, message: "草稿已从发布集合移除，建议重建索引" };
-  return NextResponse.json({ items: await items(), indexing });
+  return NextResponse.json({ id, indexing });
 }
 
 export async function PATCH() {
@@ -57,5 +91,5 @@ export async function PATCH() {
   if (!user) return NextResponse.json({ message: "未登录" }, { status: 401 });
   const indexing = await reindexPublished();
   await audit(user, { action: "REINDEX", resourceType: "knowledge_document", detail: indexing });
-  return NextResponse.json({ items: await items(), indexing }, { status: indexing.ok ? 200 : 502 });
+  return NextResponse.json({ indexing }, { status: indexing.ok ? 200 : 502 });
 }

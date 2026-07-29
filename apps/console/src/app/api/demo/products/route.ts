@@ -1,11 +1,12 @@
-import { desc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { demoProducts } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import { readSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { serializeProduct } from "@/lib/serializers";
+import { listConsoleProducts } from "@/lib/demo-service";
+import { paginationInput, paginationSchema } from "@/lib/pagination";
 
 const productSchema = z.object({
   id: z.coerce.number().int().positive().optional(), sku: z.string().trim().min(1).max(64), name: z.string().trim().min(1).max(160),
@@ -14,11 +15,16 @@ const productSchema = z.object({
 });
 
 async function authorized() { return readSession(); }
-async function items() { return (await db.select().from(demoProducts).orderBy(desc(demoProducts.updatedAt))).map(serializeProduct); }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!await authorized()) return NextResponse.json({ message: "未登录" }, { status: 401 });
-  return NextResponse.json({ items: await items() });
+  const url = new URL(request.url);
+  const pagination = paginationSchema.safeParse(paginationInput(url.searchParams));
+  const query = z.string().trim().max(200).safeParse(url.searchParams.get("q") || "");
+  if (!pagination.success || !query.success) {
+    return NextResponse.json({ message: "分页或搜索参数无效" }, { status: 400 });
+  }
+  return NextResponse.json(await listConsoleProducts(query.data, pagination.data));
 }
 
 export async function POST(request: Request) {
@@ -29,7 +35,7 @@ export async function POST(request: Request) {
   const value = parsed.data;
   const [result] = await db.insert(demoProducts).values({ ...value, imageUrl: value.imageUrl || null });
   await audit(user, { action: "CREATE", resourceType: "demo_product", resourceId: String(result.insertId), detail: { sku: value.sku } });
-  return NextResponse.json({ items: await items() }, { status: 201 });
+  return NextResponse.json({ id: Number(result.insertId) }, { status: 201 });
 }
 
 export async function PUT(request: Request) {
@@ -40,7 +46,7 @@ export async function PUT(request: Request) {
   const { id, ...value } = parsed.data;
   await db.update(demoProducts).set({ ...value, imageUrl: value.imageUrl || null }).where(eq(demoProducts.id, id));
   await audit(user, { action: "UPDATE", resourceType: "demo_product", resourceId: String(id), detail: { sku: value.sku } });
-  return NextResponse.json({ items: await items() });
+  return NextResponse.json({ id });
 }
 
 export async function DELETE(request: Request) {
@@ -50,5 +56,5 @@ export async function DELETE(request: Request) {
   if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ message: "无效 ID" }, { status: 400 });
   await db.update(demoProducts).set({ status: "OFF_SHELF" }).where(eq(demoProducts.id, id));
   await audit(user, { action: "OFF_SHELF", resourceType: "demo_product", resourceId: String(id) });
-  return NextResponse.json({ items: await items() });
+  return NextResponse.json({ id });
 }

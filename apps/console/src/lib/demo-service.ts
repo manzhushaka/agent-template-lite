@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, like, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, like, or, sql } from "drizzle-orm";
 import { demoOrderQuotes, demoOrders, demoProducts } from "@/db/schema";
 import { db } from "./db";
+import {
+  PaginatedResult,
+  PaginationQuery,
+  paginationMeta,
+  paginationOffset,
+} from "./pagination";
 import { serializeOrder, serializeProduct } from "./serializers";
 
 export class BusinessError extends Error {
@@ -16,6 +22,35 @@ export async function listProducts(query = "") {
     ? and(eq(demoProducts.status, "ON_SALE"), or(like(demoProducts.name, `%${term}%`), like(demoProducts.description, `%${term}%`), like(demoProducts.sku, `%${term}%`)))
     : eq(demoProducts.status, "ON_SALE");
   return (await db.select().from(demoProducts).where(condition).orderBy(desc(demoProducts.updatedAt))).map(serializeProduct);
+}
+
+export async function listConsoleProducts(
+  query: string,
+  pagination: PaginationQuery,
+): Promise<PaginatedResult<ReturnType<typeof serializeProduct>>> {
+  const term = query.trim();
+  const condition = term
+    ? or(
+        like(demoProducts.sku, `%${term}%`),
+        like(demoProducts.name, `%${term}%`),
+        like(demoProducts.description, `%${term}%`),
+      )
+    : undefined;
+  const [[totalRow], rows] = await Promise.all([
+    db.select({ value: count() }).from(demoProducts).where(condition),
+    db
+      .select()
+      .from(demoProducts)
+      .where(condition)
+      .orderBy(desc(demoProducts.updatedAt), desc(demoProducts.id))
+      .limit(pagination.pageSize)
+      .offset(paginationOffset(pagination)),
+  ]);
+  const total = Number(totalRow.value);
+  return {
+    items: rows.map(serializeProduct),
+    pagination: paginationMeta(pagination, total),
+  };
 }
 
 export async function prepareOrder(sessionId: string, sku: string, quantity: number) {
@@ -67,8 +102,22 @@ export async function confirmOrder(sessionId: string, quoteId: string, idempoten
   });
 }
 
-export async function listOrders() {
-  const rows = await db.select({ order: demoOrders, productName: demoProducts.name }).from(demoOrders)
-    .innerJoin(demoProducts, eq(demoOrders.productId, demoProducts.id)).orderBy(desc(demoOrders.createdAt));
-  return rows.map((row) => serializeOrder({ ...row.order, productName: row.productName }));
+export async function listOrders(
+  pagination: PaginationQuery,
+): Promise<PaginatedResult<ReturnType<typeof serializeOrder>>> {
+  const [[totalRow], rows] = await Promise.all([
+    db.select({ value: count() }).from(demoOrders),
+    db
+      .select({ order: demoOrders, productName: demoProducts.name })
+      .from(demoOrders)
+      .innerJoin(demoProducts, eq(demoOrders.productId, demoProducts.id))
+      .orderBy(desc(demoOrders.createdAt), desc(demoOrders.id))
+      .limit(pagination.pageSize)
+      .offset(paginationOffset(pagination)),
+  ]);
+  const total = Number(totalRow.value);
+  return {
+    items: rows.map((row) => serializeOrder({ ...row.order, productName: row.productName })),
+    pagination: paginationMeta(pagination, total),
+  };
 }
