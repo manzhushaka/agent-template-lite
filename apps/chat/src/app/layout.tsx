@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "智能业务助手",
+  title: "manzhushaka-agent",
   description: "Next.js + Agno 业务智能体演示模板",
 };
 
