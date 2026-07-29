@@ -1,0 +1,17 @@
+[Unit]
+Description=agent-template-lite Console
+After=network.target agent-template-lite-agentos.service
+
+[Service]
+Type=simple
+User=agent-template-lite
+WorkingDirectory=/home/app/agent-template-lite/current/apps/console
+EnvironmentFile=/home/app/agent-template-lite/shared/.env
+ExecStart=/usr/local/bin/pnpm --dir /home/app/agent-template-lite/current --filter @template/console start
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

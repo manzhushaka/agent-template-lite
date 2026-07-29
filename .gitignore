@@ -1,0 +1,15 @@
+node_modules/
+.next/
+*.tsbuildinfo
+.env
+*.log
+.DS_Store
+.venv/
+*.egg-info/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+var/lancedb/
+var/logs/
+services/agentos/.venv/
+services/agentos/data/

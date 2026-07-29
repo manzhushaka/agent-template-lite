@@ -1,0 +1,7 @@
+interface:
+  display_name: "Manzhushaka Agent Template Builder"
+  short_description: "从业务调研到独立 Demo 施工交付"
+  default_prompt: "Use $manzhushaka-agent-template-builder to turn a business idea into a researched, named, tested Next.js and Agno demo."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,20 @@
+{
+  "templateId": "manzhushaka-agent-template-lite",
+  "templateVersion": "0.1.0",
+  "projectSlug": "agent-template-lite",
+  "projectName": "智能业务助手",
+  "description": "Next.js full-stack and Agno starter for independently evolving business demos",
+  "defaultPorts": {
+    "chat": 3000,
+    "console": 3001,
+    "agentos": 8000
+  },
+  "capabilities": [
+    "chat-streaming",
+    "human-confirmation",
+    "demo-center-crud",
+    "knowledge-lancedb",
+    "audit",
+    "health-checks"
+  ]
+}

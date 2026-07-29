@@ -1,0 +1,34 @@
+[project]
+name = "agent-template-agentos"
+version = "0.1.0"
+description = "Agno AgentOS runtime for independently evolving business demos"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "agno[os]==2.8.0",
+  "fastembed>=0.7,<1",
+  "httpx>=0.28,<1",
+  "lancedb>=0.25,<1",
+  "onnxruntime>=1.27,<1.28",
+  "openai>=1.99,<2.47",
+  "pymysql>=1.1,<2",
+  "python-dotenv>=1.1,<2",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[build-system]
+requires = ["setuptools>=79"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[dependency-groups]
+dev = ["pytest>=8.4,<10", "ruff>=0.12,<1"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

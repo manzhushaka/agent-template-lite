@@ -1,0 +1,17 @@
+[Unit]
+Description=agent-template-lite AgentOS
+After=network.target
+
+[Service]
+Type=simple
+User=agent-template-lite
+WorkingDirectory=/home/app/agent-template-lite/current/services/agentos
+EnvironmentFile=/home/app/agent-template-lite/shared/.env
+ExecStart=/home/app/agent-template-lite/shared/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
