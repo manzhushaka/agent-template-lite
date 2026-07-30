@@ -11,9 +11,10 @@ export APP_LOG_FILE="$LOG_FILE"
 : > "$LOG_FILE"
 
 pnpm exec dotenv -e .env -- concurrently --kill-others-on-fail --no-color \
-  --names chat,console,agentos \
+  --names chat,console,agentos,knowledge-worker \
   --prefix "[{time} {name}]" \
   --timestamp-format "yyyy-MM-dd HH:mm:ss.SSS" \
   "pnpm --filter @template/chat dev" \
   "pnpm --filter @template/console dev" \
-  "cd services/agentos && uv run python -m app.main" 2>&1 | tee "$LOG_FILE"
+  "cd services/agentos && uv run python -m app.main" \
+  "pnpm --filter @template/console knowledge:worker" 2>&1 | tee "$LOG_FILE"

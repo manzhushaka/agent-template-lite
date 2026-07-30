@@ -53,9 +53,9 @@ Offer three to five project-name options. For each option provide Chinese name, 
 
 ## Phase 5: Construct
 
-1. Replace template identity, package scope, service names, ports, model variables, and Console labels.
+1. Write the confirmed identity to `business.yaml`, preview with `pnpm demo:init -- --config business.yaml --dry-run`, then run the same command without `--dry-run`. Do not perform free-form global replacement.
 2. Create domain tables and Drizzle migrations for real-looking demo data. Use the Console演示中心 for CRUD, not a generic JSON table.
-3. Add Console repositories, internal APIs, validation, transactions, idempotency, and audit records.
+3. Optionally create each vertical slice with `pnpm demo:add-feature -- --name <name> --type query|action`, then add Console repositories, internal APIs, validation, transactions, idempotency, and audit records.
 4. Add Python Console Client methods, Agent instructions, knowledge sources, and Tools. Use `@tool(requires_confirmation=True)` for consequential actions.
 5. Add shared card contracts, Chat renderers, confirmation copy, errors, retry behavior, and responsive verification.
 6. Add Chinese extension comments in both TypeScript and Python. Update `docs/EXTENDING.md` whenever a new extension pattern is introduced.
@@ -73,7 +73,8 @@ pnpm typecheck
 pnpm lint
 pnpm build
 pnpm check:placeholders
-cd services/agentos && uv run pytest
+pnpm eval
+pnpm e2e
 git diff --check
 ```
 

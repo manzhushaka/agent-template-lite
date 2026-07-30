@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "scenarios": [
+    {
+      "id": "knowledge-policy",
+      "title": "查询演示业务边界",
+      "messages": ["准备报价会扣减库存吗？"],
+      "expectedTools": ["search_knowledge"],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "product-recommendation",
+      "title": "按预算推荐商品",
+      "messages": ["推荐一个 200 元以内、适合送人的商品"],
+      "expectedTools": ["search_products"],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "confirmed-order",
+      "title": "选择商品并确认创建订单",
+      "messages": ["我选择 GIFT-TEA-001，数量 1，请准备订单"],
+      "expectedTools": ["prepare_order", "confirm_order"],
+      "requiresConfirmation": true
+    }
+  ]
+}

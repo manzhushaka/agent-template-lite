@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, like, or, sql } from "drizzle-orm";
-import { demoOrderQuotes, demoOrders, demoProducts } from "@/db/schema";
+import { auditLogs, demoOrderQuotes, demoOrders, demoProducts } from "@/db/schema";
 import { db } from "./db";
 import {
   PaginatedResult,
@@ -77,7 +77,16 @@ export async function confirmOrder(sessionId: string, quoteId: string, idempoten
     const [existing] = await tx.select({ order: demoOrders, productName: demoProducts.name })
       .from(demoOrders).innerJoin(demoProducts, eq(demoOrders.productId, demoProducts.id))
       .where(eq(demoOrders.idempotencyKey, idempotencyKey)).limit(1);
-    if (existing) return { order: serializeOrder({ ...existing.order, productName: existing.productName }), idempotent: true };
+    if (existing) {
+      await tx.insert(auditLogs).values({
+        actor: "internal-agent",
+        action: "ORDER_IDEMPOTENT_RETURN",
+        resourceType: "demo_order",
+        resourceId: existing.order.orderNo,
+        detail: { sessionId },
+      });
+      return { order: serializeOrder({ ...existing.order, productName: existing.productName }), idempotent: true };
+    }
 
     const [quote] = await tx.select().from(demoOrderQuotes).where(eq(demoOrderQuotes.quoteId, quoteId)).limit(1);
     if (!quote || quote.sessionId !== sessionId) throw new BusinessError("QUOTE_NOT_FOUND", "报价不存在或不属于当前会话", 404);
@@ -97,6 +106,13 @@ export async function confirmOrder(sessionId: string, quoteId: string, idempoten
     await tx.update(demoProducts).set({ stock: product.stock - quote.quantity }).where(eq(demoProducts.id, product.id));
     await tx.insert(demoOrders).values({ orderNo, idempotencyKey, sessionId, productId: product.id, quantity: quote.quantity, amountCents: quote.amountCents });
     await tx.update(demoOrderQuotes).set({ status: "CONFIRMED" }).where(eq(demoOrderQuotes.id, quote.id));
+    await tx.insert(auditLogs).values({
+      actor: "internal-agent",
+      action: "ORDER_CREATE",
+      resourceType: "demo_order",
+      resourceId: orderNo,
+      detail: { sessionId },
+    });
     const [created] = await tx.select().from(demoOrders).where(eq(demoOrders.orderNo, orderNo)).limit(1);
     return { order: serializeOrder({ ...created, productName: product.name }), idempotent: false };
   });

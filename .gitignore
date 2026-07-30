@@ -13,3 +13,5 @@ var/lancedb/
 var/logs/
 services/agentos/.venv/
 services/agentos/data/
+test-results/
+playwright-report/

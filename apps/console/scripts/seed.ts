@@ -5,14 +5,12 @@ import {
   demoProducts,
   knowledgeDocuments,
   knowledgeDocumentVersions,
+  knowledgeIndexJobs,
 } from "../src/db/schema";
 import { db, pool } from "../src/lib/db";
+import fixtures from "../../../fixtures/demo.json";
 
-const products = [
-  { sku: "GIFT-TEA-001", name: "山野茶礼盒", description: "适合商务赠礼的清香型茶礼，包装克制，支持现场自提。", priceCents: 16800, stock: 30, status: "ON_SALE" as const, imageUrl: "https://images.unsplash.com/photo-1594631252845-29fc4cc8cde9?auto=format&fit=crop&w=900&q=82" },
-  { sku: "CRAFT-CUP-002", name: "手作陶瓷杯", description: "小批量手作杯，适合作为日常纪念品或轻量伴手礼。", priceCents: 8800, stock: 18, status: "ON_SALE" as const, imageUrl: "https://images.unsplash.com/photo-1577937927133-66ef06acdf18?auto=format&fit=crop&w=900&q=82" },
-  { sku: "SERVICE-BOX-003", name: "企业体验套装", description: "用于演示咨询、推荐、确认和订单闭环的组合型业务商品。", priceCents: 29900, stock: 12, status: "ON_SALE" as const, imageUrl: "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=900&q=82" },
-];
+const products = fixtures.products.map((product) => ({ ...product, status: product.status as "ON_SALE" }));
 
 async function main() {
   const initialPassword = process.env.ADMIN_INITIAL_PASSWORD;
@@ -28,13 +26,14 @@ async function main() {
 
   await db.transaction(async (tx) => {
     let [knowledge] = await tx.select().from(knowledgeDocuments)
-      .where(eq(knowledgeDocuments.title, "演示业务服务说明"))
+      .where(eq(knowledgeDocuments.title, fixtures.knowledge.title))
       .limit(1);
 
     if (!knowledge) {
       const [inserted] = await tx.insert(knowledgeDocuments).values({
-        title: "演示业务服务说明", category: "业务规则", source: "模板种子数据", status: "PUBLISHED", indexStatus: "PENDING",
-        content: "演示中心中的商品用于展示智能推荐和受控下单。商品价格与库存必须以系统实时查询为准。准备报价不会创建订单或扣减库存；只有用户在 Chat 的人工确认面板明确同意后，系统才创建演示订单。演示订单不代表已经支付、发货或履约。",
+        ...fixtures.knowledge,
+        status: "PUBLISHED",
+        indexStatus: "PENDING",
       }).$returningId();
       [knowledge] = await tx.select().from(knowledgeDocuments)
         .where(eq(knowledgeDocuments.id, inserted.id))
@@ -65,6 +64,17 @@ async function main() {
         fileSize: knowledge.fileSize,
         status: knowledge.status,
         createdBy: "seed",
+      });
+    }
+    const [indexJob] = await tx.select({ id: knowledgeIndexJobs.id })
+      .from(knowledgeIndexJobs)
+      .where(eq(knowledgeIndexJobs.documentId, knowledge.id))
+      .limit(1);
+    if (!indexJob) {
+      await tx.insert(knowledgeIndexJobs).values({
+        documentId: knowledge.id,
+        targetVersion: knowledge.version,
+        requestedBy: "seed",
       });
     }
   });

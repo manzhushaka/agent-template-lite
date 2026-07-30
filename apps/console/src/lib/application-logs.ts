@@ -3,7 +3,7 @@ import { open } from "node:fs/promises";
 import path from "node:path";
 
 export const applicationLogLevels = ["DEBUG", "INFO", "WARN", "ERROR"] as const;
-export const applicationLogSources = ["chat", "console", "agentos", "system"] as const;
+export const applicationLogSources = ["chat", "console", "agentos", "knowledge-worker", "system"] as const;
 
 export type ApplicationLogLevel = (typeof applicationLogLevels)[number];
 export type ApplicationLogSource = (typeof applicationLogSources)[number];
@@ -27,8 +27,8 @@ const DEFAULT_LIMIT = 300;
 const MAX_LIMIT = 500;
 const MAX_READ_BYTES = 2 * 1024 * 1024;
 const ANSI_ESCAPE = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, "g");
-const PREFIX_WITH_TIME = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+(chat|console|agentos)\]\s*/;
-const LEGACY_PREFIX = /^\[(chat|console|agentos)\]\s*/;
+const PREFIX_WITH_TIME = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+(chat|console|agentos|knowledge-worker)\]\s*/;
+const LEGACY_PREFIX = /^\[(chat|console|agentos|knowledge-worker)\]\s*/;
 
 function projectRoot(): string {
   const current = process.cwd();

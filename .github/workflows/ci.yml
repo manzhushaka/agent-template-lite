@@ -6,6 +6,32 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: agent_demo
+          MYSQL_USER: agent_demo
+          MYSQL_PASSWORD: agent_demo
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      MYSQL_URL: mysql://agent_demo:agent_demo@127.0.0.1:3306/agent_demo
+      AGENT_DATABASE_URL: mysql+pymysql://agent_demo:agent_demo@127.0.0.1:3306/agent_demo
+      AUTH_SECRET: ci-auth-secret-at-least-32-characters
+      CHAT_VISITOR_SECRET: ci-visitor-secret-at-least-32-characters
+      INTERNAL_API_TOKEN: ci-internal-token-at-least-32-characters
+      ADMIN_INITIAL_PASSWORD: ci-admin-password
+      MODEL_NAME: ci-model
+      MODEL_BASE_URL: http://127.0.0.1:18000/v1
+      MODEL_API_KEY: ci-model-key
+      RUN_DB_INTEGRATION: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -15,9 +41,15 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: pnpm install --frozen-lockfile
       - run: cd services/agentos && uv sync --frozen
+      - run: pnpm --filter @template/console db:migrate
+      - run: pnpm --filter @template/console db:seed
+      - run: pnpm --filter @template/console demo:reset -- --yes
+      - run: MYSQL_URL=mysql://root:root@127.0.0.1:3306/agent_demo pnpm test:integration
       - run: pnpm test
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm build
-        env:
-          MYSQL_URL: mysql://build:build@127.0.0.1:3306/build
+      - run: pnpm check:placeholders
+      - run: pnpm eval
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm e2e

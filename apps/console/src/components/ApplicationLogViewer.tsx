@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { publicPath } from "@/lib/public-path";
 
 type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR";
-type LogSource = "chat" | "console" | "agentos" | "system";
+type LogSource = "chat" | "console" | "agentos" | "knowledge-worker" | "system";
 
 interface LogEntry {
   id: string;
@@ -99,7 +99,7 @@ export function ApplicationLogViewer() {
     <form className="log-filter-bar" onSubmit={(event) => event.preventDefault()}>
       <label className="log-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索日志内容" aria-label="搜索日志内容" /></label>
       <select value={source} onChange={(event) => setSource(event.target.value as "ALL" | LogSource)} aria-label="运行时">
-        <option value="ALL">全部运行时</option><option value="chat">Chat</option><option value="console">Console</option><option value="agentos">AgentOS</option><option value="system">System</option>
+        <option value="ALL">全部运行时</option><option value="chat">Chat</option><option value="console">Console</option><option value="agentos">AgentOS</option><option value="knowledge-worker">Knowledge Worker</option><option value="system">System</option>
       </select>
       <select value={limit} onChange={(event) => setLimit(Number(event.target.value))} aria-label="显示条数">
         <option value={100}>最近 100 条</option><option value={300}>最近 300 条</option><option value={500}>最近 500 条</option>

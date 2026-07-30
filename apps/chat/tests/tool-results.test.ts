@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { ToolResultEnvelopeSchema } from "@template/shared";
+import examples from "../../../packages/shared/contracts/tool-result.examples.json";
 import { extractCards } from "../src/lib/tool-results";
 
 describe("extractCards", () => {
@@ -9,5 +11,17 @@ describe("extractCards", () => {
     ]);
     expect(cards).toHaveLength(1);
     expect(cards[0]?.id).toBe("SKU-1");
+  });
+
+  it("rejects malformed cards instead of trusting a TypeScript assertion", () => {
+    const cards = extractCards([
+      { tool_name: "broken_contract", result: JSON.stringify({ ok: true, code: "OK", message: "ok", cards: [{ type: "product", id: "SKU-1", stock: -1 }] }) },
+    ]);
+    expect(cards).toEqual([]);
+  });
+
+  it("validates the canonical cross-language examples", () => {
+    expect(examples.valid.every((example) => ToolResultEnvelopeSchema.safeParse(example).success)).toBe(true);
+    expect(examples.invalid.every((example) => !ToolResultEnvelopeSchema.safeParse(example).success)).toBe(true);
   });
 });

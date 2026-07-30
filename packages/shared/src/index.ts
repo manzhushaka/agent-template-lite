@@ -1,41 +1,12 @@
-/** Stable identifier used by Chat when calling the Agno AgentOS run endpoints. */
-export const TEMPLATE_AGENT_ID = "business-demo-agent";
-
-/**
- * Tool results use this envelope so Chat can render business data without parsing prose.
- * EXTENSION: Add a new card type to `DemoCard`, then register its renderer in Chat. Keep
- * the envelope stable so existing sessions remain readable after business features grow.
- */
-export interface ToolResultEnvelope<T = unknown> {
-  ok: boolean;
-  code: string;
-  message: string;
-  data?: T;
-  cards?: DemoCard[];
-  idempotent?: boolean;
-}
-
-export interface ProductCard {
-  type: "product";
-  id: string;
-  title: string;
-  description: string;
-  price: string;
-  stock: number;
-  imageUrl?: string;
-  actionLabel?: string;
-}
-
-export interface OrderCard {
-  type: "order";
-  id: string;
-  title: string;
-  description: string;
-  amount: string;
-  status: string;
-}
-
-export type DemoCard = ProductCard | OrderCard;
+export { PROJECT_CONFIG, TEMPLATE_AGENT_ID } from "./project-config";
+export {
+  DemoCardSchema,
+  OrderCardSchema,
+  ProductCardSchema,
+  ToolResultEnvelopeSchema,
+  parseToolResultEnvelope,
+} from "./contracts";
+export type { DemoCard, OrderCard, ProductCard, ToolResultEnvelope } from "./contracts";
 
 export interface DemoProduct {
   id: number;

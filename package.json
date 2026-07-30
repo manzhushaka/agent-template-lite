@@ -1,6 +1,6 @@
 {
   "name": "agent-template-lite",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "packageManager": "pnpm@10.6.2",
   "scripts": {
@@ -10,16 +10,29 @@
     "lint": "pnpm --filter @template/chat lint && pnpm --filter @template/console lint && cd services/agentos && uv run ruff check app tests",
     "typecheck": "pnpm --filter @template/shared typecheck && pnpm --filter @template/chat typecheck && pnpm --filter @template/console typecheck",
     "test": "pnpm --filter @template/chat test && pnpm --filter @template/console test && cd services/agentos && uv run pytest",
+    "test:integration": "dotenv -e .env -- node scripts/test-db-integration.mjs",
     "db:generate": "pnpm --filter @template/console db:generate",
+    "db:build-init": "node scripts/build-mysql-init.mjs",
     "db:migrate": "dotenv -e .env -- pnpm --filter @template/console db:migrate",
     "db:seed": "dotenv -e .env -- pnpm --filter @template/console db:seed",
+    "demo:init": "node scripts/demo-init.mjs",
+    "demo:add-feature": "node scripts/demo-add-feature.mjs",
+    "demo:doctor": "node scripts/demo-doctor.mjs",
+    "demo:reset": "dotenv -e .env -- pnpm --filter @template/console demo:reset",
+    "eval": "node scripts/eval-agent.mjs --check",
+    "eval:live": "dotenv -e .env -- node scripts/eval-agent.mjs --live",
+    "e2e": "playwright test",
+    "config:sync": "node scripts/sync-project-config.mjs",
+    "config:check": "node scripts/sync-project-config.mjs --check",
     "start": "bash scripts/start.sh",
     "status": "bash scripts/status.sh",
     "stop": "bash scripts/stop.sh",
-    "check:placeholders": "node scripts/check-placeholders.mjs"
+    "check:placeholders": "node scripts/check-placeholders.mjs && node scripts/sync-project-config.mjs --check && node scripts/build-mysql-init.mjs --check"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "dotenv-cli": "^8.0.0"
+    "dotenv-cli": "^8.0.0",
+    "@playwright/test": "^1.55.0",
+    "yaml": "^2.8.1"
   }
 }

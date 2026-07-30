@@ -1,4 +1,5 @@
 import { compare } from "bcryptjs";
+import { PROJECT_CONFIG } from "@template/shared";
 import { eq } from "drizzle-orm";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
@@ -6,7 +7,7 @@ import { redirect } from "next/navigation";
 import { consoleUsers } from "@/db/schema";
 import { db } from "./db";
 
-export const SESSION_COOKIE = "agent_template_console_session";
+export const SESSION_COOKIE = `${PROJECT_CONFIG.cookiePrefix}_console_session`;
 const secret = new TextEncoder().encode(process.env.AUTH_SECRET || "local-development-only-change-me");
 
 export interface SessionUser { id: number; username: string; displayName: string; role: string }

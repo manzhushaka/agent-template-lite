@@ -1,5 +1,7 @@
 # 扩展业务指南
 
+开始新增业务能力前，可以运行 `pnpm demo:add-feature -- --name <feature> --type query|action`。生成清单的状态默认为 `SCAFFOLDED`，只有合同、Console、AgentOS、Chat、测试和黄金场景全部完成后才能改为 `IMPLEMENTED`。
+
 ## 新增一个查询 Tool
 
 1. 在 `apps/console/src/db/schema.ts` 定义业务表，并运行 `pnpm db:generate`。
@@ -22,9 +24,9 @@
 
 ## 新增卡片
 
-1. 在 `packages/shared/src/index.ts` 增加卡片接口并加入 `DemoCard` 联合类型。
+1. 在 `packages/shared/src/contracts.ts` 增加 Zod 卡片 Schema 并加入 `DemoCardSchema` 联合类型，同时更新 Python Pydantic 合同和共享样例。
 2. Python Tool 在 `cards` 中返回该类型，不把结构化数据塞进 Markdown。
-3. 在 Chat 新建独立卡片组件并注册渲染器。
+3. 在 Chat 新建独立卡片组件并注册到 `components/cards/CardRenderer.tsx`。
 4. 验证 1440px、991px 和 390px 视口，确保最长文字和按钮不重叠。
 
 ## 新增演示中心 CRUD
@@ -37,8 +39,8 @@ Console 的 `knowledge_document` 是事实源。新增来源类型时：
 
 1. 在 `knowledge-import.ts` 的边界校验中增加 MIME、体积和安全规则。
 2. 解析为可审计正文，保存来源 URI、SHA-256、文件元数据和不可变版本快照。
-3. 创建 `knowledge_index_job`，不要让上传请求同步等待 Embedding。
-4. 通过任务处理接口重建 LanceDB，并保留失败原因与显式重试路径。
+3. 创建 `knowledge_index_job`，不要让上传请求或浏览器同步等待 Embedding。
+4. 由 `knowledge-worker.ts` 自动消费任务并重建 LanceDB，保留失败原因、崩溃恢复与显式重试路径。
 5. 在知识页验证来源、版本、任务状态和切片预览。
 
 不得把仅存在于 LanceDB 的向量当成可审计知识，也不得允许网页导入访问本机或内网地址。

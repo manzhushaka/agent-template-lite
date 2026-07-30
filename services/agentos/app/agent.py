@@ -7,9 +7,8 @@ from agno.models.openai import OpenAIChat
 from app.config import Settings
 from app.console_client import ConsoleClient
 from app.knowledge_store import KnowledgeStore
+from app.project_config import AGENT_ID, AGENT_NAME
 from app.tools import build_business_tools
-
-AGENT_ID = "business-demo-agent"
 
 
 def build_agent(settings: Settings, knowledge: KnowledgeStore, database: MySQLDb) -> Agent:
@@ -22,7 +21,7 @@ def build_agent(settings: Settings, knowledge: KnowledgeStore, database: MySQLDb
     client = ConsoleClient(settings.console_url, settings.internal_api_token)
     return Agent(
         id=AGENT_ID,
-        name="智能业务助手",
+        name=AGENT_NAME,
         model=OpenAIChat(
             id=settings.model_name,
             api_key=settings.model_api_key,

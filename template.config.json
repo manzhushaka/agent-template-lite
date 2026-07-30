@@ -1,9 +1,27 @@
 {
+  "schemaVersion": 1,
   "templateId": "manzhushaka-agent-template-lite",
-  "templateVersion": "0.1.0",
+  "templateVersion": "0.3.0",
+  "mode": "template",
   "projectSlug": "agent-template-lite",
   "projectName": "智能业务助手",
+  "projectNameEn": "Agent Template Lite",
+  "packageScope": "@template",
   "description": "Next.js full-stack and Agno starter for independently evolving business demos",
+  "agent": {
+    "id": "business-demo-agent",
+    "name": "智能业务助手",
+    "tools": [
+      { "name": "search_knowledge", "kind": "query" },
+      { "name": "search_products", "kind": "query" },
+      { "name": "prepare_order", "kind": "prepare" },
+      { "name": "confirm_order", "kind": "action", "requiresConfirmation": true }
+    ]
+  },
+  "database": {
+    "name": "agent_demo"
+  },
+  "cookiePrefix": "agent_template",
   "defaultPorts": {
     "chat": 3000,
     "console": 3001,
@@ -13,8 +31,17 @@
     "chat-streaming",
     "human-confirmation",
     "demo-center-crud",
+    "knowledge-import-versioning",
     "knowledge-lancedb",
     "audit",
-    "health-checks"
+    "health-checks",
+    "observability",
+    "session-isolation",
+    "application-logs",
+    "server-pagination",
+    "project-generator",
+    "contract-validation",
+    "demo-scenarios",
+    "agent-evaluations"
   ]
 }

@@ -1,0 +1,26 @@
+{
+  "valid": [
+    {
+      "ok": true,
+      "code": "PRODUCTS_FOUND",
+      "message": "找到 1 个商品",
+      "cards": [
+        { "type": "product", "id": "SKU-1", "title": "示例商品", "description": "用于合同测试", "price": "¥1.00", "stock": 2 }
+      ],
+      "idempotent": false
+    },
+    {
+      "ok": true,
+      "code": "ORDER_CREATED",
+      "message": "订单已创建",
+      "cards": [
+        { "type": "order", "id": "D-1", "title": "订单 D-1", "description": "示例商品 × 1", "amount": "¥1.00", "status": "CREATED" }
+      ],
+      "idempotent": true
+    }
+  ],
+  "invalid": [
+    { "ok": true, "code": "BROKEN", "message": "缺少卡片字段", "cards": [{ "type": "product", "id": "SKU-1", "stock": -1 }] },
+    { "ok": "yes", "code": "BROKEN", "message": "错误布尔值", "cards": [] }
+  ]
+}

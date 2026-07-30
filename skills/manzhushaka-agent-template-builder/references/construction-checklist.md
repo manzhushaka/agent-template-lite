@@ -7,8 +7,10 @@
 - [ ] Internal API has an explicit `x-internal-token` check.
 - [ ] Python Console Client has typed inputs and controlled errors.
 - [ ] Tool returns `ToolResultEnvelope` JSON, not UI-specific prose.
+- [ ] Zod, Pydantic and the canonical contract examples accept the same payload.
 - [ ] Shared TypeScript card type and Chat renderer agree.
 - [ ] Consequential Tool has Agno native confirmation and idempotency.
+- [ ] Business write and audit commit atomically or through an outbox.
 
 ## Knowledge
 
@@ -18,6 +20,7 @@
 - [ ] Imported files and web pages record source hash, immutable version and a retryable index job.
 - [ ] Web import rejects local/private addresses, unsupported MIME types and oversized bodies.
 - [ ] Console can inspect the latest index status, failure reason and chunk preview.
+- [ ] The knowledge worker consumes pending jobs after the browser is closed and recovers stale jobs.
 - [ ] Knowledge facts are not invented by the Agent instructions.
 
 ## Comments and Handoff
@@ -29,3 +32,5 @@
 - [ ] No secret or full personal data appears in logs or responses.
 - [ ] Chat session reads and mutations verify server-side visitor ownership.
 - [ ] Observability returns aggregates and masked visitor labels, not full prompts or identities.
+- [ ] `pnpm demo:reset -- --yes` restores the documented golden scenario.
+- [ ] `pnpm eval` and the affected browser E2E scenario pass.

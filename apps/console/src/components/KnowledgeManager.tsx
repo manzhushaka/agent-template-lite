@@ -92,6 +92,14 @@ export function KnowledgeManager() {
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [load, loadJobs, pagination.page, pagination.pageSize, query]);
 
+  useEffect(() => {
+    if (!jobs.some((job) => job.status === "PENDING" || job.status === "RUNNING")) return;
+    const timer = window.setInterval(() => {
+      void Promise.all([load(pagination, query), loadJobs()]);
+    }, 2_500);
+    return () => window.clearInterval(timer);
+  }, [jobs, load, loadJobs, pagination, query]);
+
   async function runIndexJob(jobId: number) {
     const response = await fetch(publicPath(`/api/knowledge/jobs/${jobId}`), { method: "POST" });
     const body = await response.json().catch(() => ({}));
@@ -125,7 +133,7 @@ export function KnowledgeManager() {
       setEditing(null);
       setMessage(body.message || "知识已保存");
       await load(editing?.id ? pagination : { ...pagination, page: 1 }, query);
-      if (body.jobId) void processAndRefresh(Number(body.jobId));
+      await loadJobs();
     } catch (saveError) {
       setMessage(saveError instanceof Error ? saveError.message : "保存失败");
     } finally {
@@ -146,7 +154,7 @@ export function KnowledgeManager() {
       setImporting(false);
       setMessage(result.message || "知识已导入");
       setPagination((current) => ({ ...current, page: 1 }));
-      if (result.jobId) void processAndRefresh(Number(result.jobId));
+      await loadJobs();
     } catch (importError) {
       setMessage(importError instanceof Error ? importError.message : "导入失败");
     } finally {
@@ -162,7 +170,7 @@ export function KnowledgeManager() {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.message || "索引任务创建失败");
       setMessage(body.message);
-      if (body.jobId) await processAndRefresh(Number(body.jobId));
+      await loadJobs();
     } catch (reindexError) {
       setMessage(reindexError instanceof Error ? reindexError.message : "索引请求失败");
     } finally {

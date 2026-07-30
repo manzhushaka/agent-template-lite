@@ -1,0 +1,16 @@
+schemaVersion: 1
+projectSlug: customer-service-demo
+projectName: 客户服务助手
+projectNameEn: Customer Service Agent
+packageScope: "@customer-service"
+description: Independent customer service Agent demo
+agent:
+  id: customer-service-agent
+  name: 客户服务助手
+database:
+  name: customer_service_demo
+cookiePrefix: customer_service
+defaultPorts:
+  chat: 3100
+  console: 3101
+  agentos: 8100

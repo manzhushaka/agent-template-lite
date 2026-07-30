@@ -20,7 +20,11 @@ describe("application logs", () => {
       source: "console",
       timestamp: null,
     });
-    expect(parseApplicationLogLine("unprefixed supervisor message", 6)).toMatchObject({
+    expect(parseApplicationLogLine("[2026-07-30 14:25:09.200 knowledge-worker] job completed", 6)).toMatchObject({
+      level: "INFO",
+      source: "knowledge-worker",
+    });
+    expect(parseApplicationLogLine("unprefixed supervisor message", 7)).toMatchObject({
       level: "INFO",
       source: "system",
     });

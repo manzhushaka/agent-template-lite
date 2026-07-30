@@ -2,19 +2,19 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { BadgeDollarSign, Check, CircleAlert, CircleHelp, Gift, LoaderCircle, Menu, MessageSquare, MessageSquarePlus, PackageSearch, Pencil, Send, Trash2, X } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BadgeDollarSign, CircleHelp, Gift, LoaderCircle, Menu, MessageSquare, MessageSquarePlus, Pencil, Send, Trash2, X } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { TEMPLATE_AGENT_ID, type DemoCard } from "@template/shared";
-import { restoreConversation, type HistoricalApproval, type HistoricalTool } from "@/lib/chat-history";
+import { CardRenderer } from "@/components/cards/CardRenderer";
+import { ConfirmationDialog } from "@/components/ConfirmationDialog";
+import { streamAgentRun } from "@/lib/agent-run";
+import { restoreConversation, type HistoricalApproval } from "@/lib/chat-history";
 import { publicPath } from "@/lib/public-path";
 import type { BrowserSessionSummary } from "@/lib/session";
-import { consumeSseStream } from "@/lib/sse";
-import { extractCards } from "@/lib/tool-results";
 import { createUuid } from "@/lib/uuid";
 
 type Message = { id: string; role: "user" | "assistant"; content: string; cards?: DemoCard[]; pending?: boolean; error?: boolean };
-type ConfirmationTool = HistoricalTool & { tool_call_id?: string };
 type Approval = HistoricalApproval;
 
 const apiBase = publicPath("/agent-api").replace(/\/$/, "");
@@ -24,12 +24,6 @@ const starterPrompts = [
   { label: "预算选品", prompt: "推荐一个 200 元以内的商品", icon: BadgeDollarSign },
   { label: "能力介绍", prompt: "介绍一下你能帮我完成什么", icon: CircleHelp },
 ];
-
-function formBody(values: Record<string, unknown>): FormData {
-  const body = new FormData();
-  Object.entries(values).forEach(([key, value]) => body.append(key, String(value)));
-  return body;
-}
 
 function createMessage(role: Message["role"], content: string, extra: Partial<Message> = {}): Message {
   return { id: createUuid(), role, content, ...extra };
@@ -138,65 +132,25 @@ export function ChatApp() {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, approval]);
 
-  const approvalTool = approval?.pendingTools[0];
-  const approvalTitle = useMemo(() => {
-    const name = approvalTool?.tool_name || approvalTool?.name;
-    return name === "confirm_order" ? "确认创建演示订单" : "确认执行操作";
-  }, [approvalTool]);
-
   function updateAssistant(id: string, update: (message: Message) => Message) {
     setMessages((current) => current.map((message) => message.id === id ? update(message) : message));
   }
 
   async function requestRun(path: string, values: Record<string, unknown>) {
-    const response = await fetch(`${apiBase}${path}`, {
-      method: "POST",
-      headers: { Accept: "text/event-stream" },
-      body: formBody({ ...values, stream: true }),
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.detail || `请求失败（${response.status}）`);
-    }
-    if (!response.body) throw new Error("浏览器不支持流式响应");
-
     const assistant = createMessage("assistant", "", { pending: true });
     setMessages((current) => [...current, assistant]);
-    const tools = new Map<string, ConfirmationTool & { result?: unknown; tool_call_error?: boolean }>();
-    let terminal: Record<string, unknown> | null = null;
-    let streamError = "";
-
-    await consumeSseStream(response.body, ({ event, data }) => {
-      const payload = data as Record<string, unknown>;
-      const name = String(payload.event || event);
-      const incoming = [
-        ...(Array.isArray(payload.tools) ? payload.tools : []),
-        ...(payload.tool ? [payload.tool] : []),
-      ] as Array<ConfirmationTool & { tool_call_id?: string; result?: unknown; tool_call_error?: boolean }>;
-      incoming.forEach((tool) => tools.set(tool.tool_call_id || `${tool.tool_name}:${JSON.stringify(tool.tool_args || {})}`, tool));
-      if (name === "RunContent" && typeof payload.content === "string") {
-        updateAssistant(assistant.id, (message) => ({ ...message, content: message.content + payload.content }));
-      }
-      if (name === "RunError") streamError = String(payload.content || "智能体响应失败");
-      if (name === "RunCompleted" || name === "RunPaused") {
-        terminal = { ...payload, status: name === "RunPaused" ? "PAUSED" : payload.status || "COMPLETED" };
-      }
+    const run = await streamAgentRun(`${apiBase}${path}`, values, (content) => {
+      updateAssistant(assistant.id, (message) => ({ ...message, content: message.content + content }));
     });
-
-    if (streamError) throw new Error(streamError);
-    if (!terminal) throw new Error("流式响应意外结束");
-    const run = terminal as Record<string, unknown>;
-    const toolList = [...tools.values()];
-    const cards = extractCards(toolList);
     updateAssistant(assistant.id, (message) => ({
       ...message,
-      content: message.content || String(run.content || (cards.length ? "业务数据已经准备好。" : "操作已经完成。")),
-      cards,
+      content: message.content || run.content,
+      cards: run.cards,
       pending: false,
     }));
-    const pendingTools = toolList.filter((tool) => tool.requires_confirmation && tool.confirmed == null);
+    const pendingTools = run.tools.filter((tool) => tool.requires_confirmation && tool.confirmed == null);
     if (run.status === "PAUSED" && pendingTools.length) {
-      setApproval({ runId: String(run.run_id), tools: toolList, pendingTools });
+      setApproval({ runId: run.runId, tools: run.tools, pendingTools });
     }
   }
 
@@ -315,7 +269,7 @@ export function ChatApp() {
 
       <nav className="sidebar-section" aria-label="常用对话">
         <p>常用对话</p>
-        {starterPrompts.map((prompt) => <button type="button" key={prompt.label} onClick={() => { setSidebarOpen(false); void send(prompt.prompt); }}><prompt.icon size={17} /><span>{prompt.label}</span></button>)}
+        {starterPrompts.map((prompt) => <button type="button" key={prompt.label} disabled={pending || sessionLoading || Boolean(approval)} onClick={() => { setSidebarOpen(false); void send(prompt.prompt); }}><prompt.icon size={17} /><span>{prompt.label}</span></button>)}
       </nav>
 
       <section className="session-history" aria-label="历史会话">
@@ -344,16 +298,11 @@ export function ChatApp() {
             <div className="message-body">
               <div className="message-label">{message.role === "assistant" ? "manzhushaka-agent" : "你"}</div>
               <div className="message-bubble">{message.content ? <ReactMarkdown>{message.content}</ReactMarkdown> : <span className="typing"><i /><i /><i /></span>}</div>
-              {message.cards?.length ? <div className="result-grid">{message.cards.map((card) => card.type === "product"
-                ? <section className="result-card product-card" key={`${card.type}-${card.id}`}>
-                    {card.imageUrl ? <img src={card.imageUrl} alt={card.title} /> : <div className="image-fallback"><PackageSearch /></div>}
-                    <div><small>推荐商品</small><h2>{card.title}</h2><p>{card.description}</p><footer><strong>{card.price}</strong><span>库存 {card.stock}</span><button onClick={() => void send(`我选择商品 ${card.id}，请按 1 件为我准备订单。`)}>{card.actionLabel || "选择"}</button></footer></div>
-                  </section>
-                : <section className="result-card order-card" key={`${card.type}-${card.id}`}><Check size={22} /><div><small>{card.status}</small><h2>{card.title}</h2><p>{card.description}</p><strong>{card.amount}</strong></div></section>)}</div> : null}
+              {message.cards?.length ? <div className="result-grid">{message.cards.map((card) => <CardRenderer key={`${card.type}-${card.id}`} card={card} onSelectProduct={(sku) => void send(`我选择商品 ${sku}，请按 1 件为我准备订单。`)} />)}</div> : null}
             </div>
           </article>)}
 
-          {!messages.some((message) => message.role === "user") && <div className="starter-prompts">{starterPrompts.map((prompt) => <button type="button" key={prompt.label} onClick={() => void send(prompt.prompt)}><span><prompt.icon size={17} /></span><div><strong>{prompt.label}</strong><small>{prompt.prompt}</small></div></button>)}</div>}
+          {!messages.some((message) => message.role === "user") && <div className="starter-prompts">{starterPrompts.map((prompt) => <button type="button" key={prompt.label} disabled={pending || sessionLoading || Boolean(approval)} onClick={() => void send(prompt.prompt)}><span><prompt.icon size={17} /></span><div><strong>{prompt.label}</strong><small>{prompt.prompt}</small></div></button>)}</div>}
         </div>
       </div>
 
@@ -363,6 +312,6 @@ export function ChatApp() {
       </footer>
     </section>
 
-    {approval && <div className="modal-layer"><button className="modal-scrim" aria-label="关闭" onClick={() => void resolveApproval(false)} /><section className="confirm-dialog" role="dialog" aria-modal="true"><header><span><CircleAlert size={20} /></span><button onClick={() => void resolveApproval(false)} aria-label="取消"><X size={18} /></button></header><small>HUMAN CONFIRMATION</small><h2>{approvalTitle}</h2><p>该操作将写入演示业务数据。请确认信息无误后继续，取消不会产生业务记录。</p><div className="confirm-args">{Object.entries(approvalTool?.tool_args || {}).map(([key, value]) => <div key={key}><span>{key}</span><strong>{String(value)}</strong></div>)}</div><footer><button className="secondary-button" onClick={() => void resolveApproval(false)}>取消</button><button className="primary-button" onClick={() => void resolveApproval(true)}><Check size={16} />确认执行</button></footer></section></div>}
+    {approval && <ConfirmationDialog approval={approval} onResolve={(confirmed) => void resolveApproval(confirmed)} />}
   </main>;
 }

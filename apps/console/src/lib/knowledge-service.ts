@@ -1,5 +1,6 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, sql } from "drizzle-orm";
 import type { RowDataPacket } from "mysql2";
+import { PROJECT_CONFIG } from "@template/shared";
 import {
   knowledgeDocuments,
   knowledgeDocumentVersions,
@@ -78,9 +79,11 @@ export async function enqueueKnowledgeIndex(documentId: number | null, targetVer
 
 export async function processKnowledgeIndexJob(jobId: number) {
   const lockConnection = await pool.getConnection();
+  const lockName = `${PROJECT_CONFIG.cookiePrefix}_knowledge_index`;
   interface LockRow extends RowDataPacket { acquired: number }
   const [lockRows] = await lockConnection.query<LockRow[]>(
-    "SELECT GET_LOCK('agent_template_knowledge_index', 0) AS acquired",
+    "SELECT GET_LOCK(?, 0) AS acquired",
+    [lockName],
   );
   if (lockRows[0]?.acquired !== 1) {
     lockConnection.release();
@@ -104,13 +107,31 @@ export async function processKnowledgeIndexJob(jobId: number) {
     if (job.documentId) {
       await db.update(knowledgeDocuments).set({ indexStatus: "INDEXING", indexError: null })
         .where(eq(knowledgeDocuments.id, job.documentId));
+    } else {
+      await db.update(knowledgeDocuments).set({ indexStatus: "INDEXING", indexError: null });
     }
 
     try {
+      const snapshot = await db.select({
+        id: knowledgeDocuments.id,
+        version: knowledgeDocuments.version,
+        status: knowledgeDocuments.status,
+      }).from(knowledgeDocuments);
       const result = await requestKnowledgeReindex() as { indexedIds?: number[] };
       const indexedIds = result.indexedIds || [];
+      const indexed = new Set(indexedIds);
       const now = new Date();
-      await db.update(knowledgeDocuments).set({ indexStatus: "READY", indexError: null, indexedAt: now });
+      for (const document of snapshot) {
+        const synchronized = document.status !== "PUBLISHED" || indexed.has(document.id);
+        await db.update(knowledgeDocuments).set({
+          indexStatus: synchronized ? "READY" : "ERROR",
+          indexError: synchronized ? null : "AgentOS 未返回该已发布文档的索引结果",
+          indexedAt: synchronized ? now : null,
+        }).where(and(
+          eq(knowledgeDocuments.id, document.id),
+          eq(knowledgeDocuments.version, document.version),
+        ));
+      }
       await db.update(knowledgeIndexJobs).set({ status: "SUCCEEDED", finishedAt: now })
         .where(eq(knowledgeIndexJobs.id, jobId));
       return { indexedIds, count: indexedIds.length };
@@ -119,13 +140,41 @@ export async function processKnowledgeIndexJob(jobId: number) {
       if (job.documentId) {
         await db.update(knowledgeDocuments).set({ indexStatus: "ERROR", indexError: message })
           .where(eq(knowledgeDocuments.id, job.documentId));
+      } else {
+        await db.update(knowledgeDocuments).set({ indexStatus: "ERROR", indexError: message })
+          .where(eq(knowledgeDocuments.indexStatus, "INDEXING"));
       }
       await db.update(knowledgeIndexJobs).set({ status: "FAILED", lastError: message, finishedAt: new Date() })
         .where(eq(knowledgeIndexJobs.id, jobId));
       throw new Error(message);
     }
   } finally {
-    await lockConnection.query("SELECT RELEASE_LOCK('agent_template_knowledge_index')");
+    await lockConnection.query("SELECT RELEASE_LOCK(?)", [lockName]);
     lockConnection.release();
   }
+}
+
+/** Recover jobs abandoned by a crashed worker without retrying recent in-flight requests. */
+export async function recoverStaleKnowledgeIndexJobs(staleAfterMs = 5 * 60_000) {
+  const cutoff = new Date(Date.now() - staleAfterMs);
+  const result = await db.update(knowledgeIndexJobs).set({
+    status: "PENDING",
+    lastError: "Worker interrupted; queued for recovery",
+    startedAt: null,
+    finishedAt: null,
+  }).where(and(
+    eq(knowledgeIndexJobs.status, "RUNNING"),
+    lt(knowledgeIndexJobs.startedAt, cutoff),
+  ));
+  return Number(result[0].affectedRows || 0);
+}
+
+/** Process one queued job so the standalone worker stays bounded and easy to stop. */
+export async function processNextKnowledgeIndexJob() {
+  const [job] = await db.select({ id: knowledgeIndexJobs.id }).from(knowledgeIndexJobs)
+    .where(eq(knowledgeIndexJobs.status, "PENDING"))
+    .orderBy(asc(knowledgeIndexJobs.createdAt), asc(knowledgeIndexJobs.id))
+    .limit(1);
+  if (!job) return null;
+  return { jobId: job.id, result: await processKnowledgeIndexJob(job.id) };
 }

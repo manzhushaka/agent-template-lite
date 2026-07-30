@@ -7,6 +7,8 @@ from typing import Any
 from agno.db.base import SessionType
 from agno.db.mysql import MySQLDb
 
+from app.project_config import AGENT_ID
+
 
 def _number(value: Any) -> float:
     return float(value) if isinstance(value, (int, float)) else 0.0
@@ -37,7 +39,7 @@ def build_observability(database: MySQLDb, page: int = 1, limit: int = 20) -> di
     """Build bounded operational metrics from Agno's persisted sessions, runs, and traces."""
     sessions, total_sessions = database.get_sessions(
         session_type=SessionType.AGENT,
-        component_id="business-demo-agent",
+        component_id=AGENT_ID,
         limit=limit,
         page=page,
         sort_by="updated_at",
@@ -46,10 +48,10 @@ def build_observability(database: MySQLDb, page: int = 1, limit: int = 20) -> di
     )
     all_sessions, _ = database.get_sessions(
         session_type=SessionType.AGENT,
-        component_id="business-demo-agent",
+        component_id=AGENT_ID,
         deserialize=False,
     )
-    traces, total_traces = database.get_traces(agent_id="business-demo-agent", limit=50, page=1)
+    traces, total_traces = database.get_traces(agent_id=AGENT_ID, limit=50, page=1)
 
     totals: dict[str, float] = {
         "sessions": float(len(all_sessions)),

@@ -1,7 +1,8 @@
+import { PROJECT_CONFIG } from "@template/shared";
 import { createUuid } from "./uuid";
 
-const SESSION_KEY = "agent-template-session";
-const SESSION_HISTORY_KEY = "agent-template-session-history";
+const SESSION_KEY = `${PROJECT_CONFIG.cookiePrefix}-session`;
+const SESSION_HISTORY_KEY = `${PROJECT_CONFIG.cookiePrefix}-session-history`;
 const SESSION_HISTORY_LIMIT = 50;
 
 type SessionStorage = Pick<Storage, "getItem" | "setItem">;

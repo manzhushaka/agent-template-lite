@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
+import { PROJECT_CONFIG } from "@template/shared";
 
-export const LOGIN_CAPTCHA_COOKIE = "agent_template_login_captcha";
+export const LOGIN_CAPTCHA_COOKIE = `${PROJECT_CONFIG.cookiePrefix}_login_captcha`;
 export const LOGIN_CAPTCHA_MAX_AGE_SECONDS = 5 * 60;
 
 const CAPTCHA_CHARACTERS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";

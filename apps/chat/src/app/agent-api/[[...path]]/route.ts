@@ -1,4 +1,4 @@
-import { TEMPLATE_AGENT_ID } from "@template/shared";
+import { allowedAgentRequest } from "@/lib/agent-api-policy";
 import { consumeRunLimit } from "@/lib/rate-limit";
 import { assertSessionOwner, consoleChatRequest } from "@/lib/server-clients";
 import { attachVisitorCookie, visitorIdentity } from "@/lib/visitor";
@@ -16,10 +16,7 @@ async function proxy(request: Request, context: Context): Promise<Response> {
   const method = request.method.toUpperCase();
   const hasRequestBody = !new Set(["GET", "HEAD"]).has(method);
   const healthRequest = method === "GET" && path.join("/") === "api/health";
-  const historyRequest = method === "GET" && path.length === 3 && path[0] === "sessions" && path[2] === "runs";
-  const runRequest = method === "POST" && path.length === 3 && path[0] === "agents" && path[1] === TEMPLATE_AGENT_ID && path[2] === "runs";
-  const continueRequest = method === "POST" && path.length === 5 && path[0] === "agents" && path[1] === TEMPLATE_AGENT_ID && path[2] === "runs" && path[4] === "continue";
-  if (!healthRequest && !historyRequest && !runRequest && !continueRequest) {
+  if (!allowedAgentRequest(method, path)) {
     return Response.json({ detail: "接口不可用" }, { status: 404 });
   }
   const visitor = healthRequest ? null : visitorIdentity(request);

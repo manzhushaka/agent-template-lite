@@ -15,11 +15,12 @@ from app.config import Settings
 from app.console_client import ConsoleClient
 from app.knowledge_store import KnowledgeDocument, LanceDbKnowledgeStore
 from app.observability import build_observability
+from app.project_config import AGENT_NAME, PROJECT_NAME_EN, PROJECT_SLUG, PROJECT_VERSION
 
 settings = Settings.from_env()
 logger = logging.getLogger(__name__)
 agent_database = MySQLDb(
-    id="agent-template-mysql",
+    id=f"{PROJECT_SLUG}-mysql",
     db_url=settings.agent_database_url,
     db_schema=settings.agent_database_schema,
     create_schema=False,
@@ -35,7 +36,7 @@ console_client = ConsoleClient(settings.console_url, settings.internal_api_token
 
 
 def rebuild_knowledge() -> list[int]:
-    documents = [KnowledgeDocument(**item) for item in console_client.published_knowledge()]
+    documents = [KnowledgeDocument(**item.model_dump()) for item in console_client.published_knowledge()]
     return knowledge_store.rebuild(documents)
 
 
@@ -50,7 +51,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-base_app = FastAPI(title="Agent Template AgentOS", version="0.1.0")
+base_app = FastAPI(title=f"{PROJECT_NAME_EN} AgentOS", version=PROJECT_VERSION)
 
 
 @base_app.middleware("http")
@@ -131,8 +132,8 @@ def admin_knowledge_chunks(document_id: int) -> dict:
 
 
 agent_os = AgentOS(
-    id="business-demo-agent-os",
-    name="智能业务助手",
+    id=f"{PROJECT_SLUG}-agent-os",
+    name=AGENT_NAME,
     description="Next.js 全栈与 Agno 的独立业务 Demo 运行时",
     agents=[business_agent],
     db=agent_database,

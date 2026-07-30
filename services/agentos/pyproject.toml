@@ -1,6 +1,6 @@
 [project]
-name = "agent-template-agentos"
-version = "0.1.0"
+name = "agent-template-lite-agentos"
+version = "0.3.0"
 description = "Agno AgentOS runtime for independently evolving business demos"
 requires-python = ">=3.11,<3.14"
 dependencies = [
@@ -12,6 +12,7 @@ dependencies = [
   "openai>=1.99,<2.47",
   "pymysql>=1.1,<2",
   "python-dotenv>=1.1,<2",
+  "pydantic>=2.11,<3",
   "uvicorn[standard]>=0.35,<1",
 ]
 

@@ -143,6 +143,8 @@ pnpm typecheck
 pnpm lint
 pnpm build
 pnpm check:placeholders
+pnpm eval
+pnpm e2e
 git diff --check
 ```
 

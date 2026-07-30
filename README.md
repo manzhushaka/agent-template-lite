@@ -17,6 +17,9 @@ Agent Template Lite 是一个用于构建独立业务 Agent Demo 的 Next.js 全
 - Agent Session、Run、Trace、Token、耗时、Tool 和异常观测，以及在线应用日志与可筛选审计日志。
 - 签名访客身份、服务端会话归属、会话重命名/删除和模型 Run 限流。
 - 配套项目构建 Skill，用于完成业务访谈、命名确认和模板改造。
+- 配置驱动的项目初始化、纵切面脚手架、环境诊断和模板一致性校验。
+- TypeScript Zod 与 Python Pydantic 运行时合同，以及两端共用的合同样例。
+- 可重复的 Demo 数据重置、黄金业务场景、真实模型评测和浏览器闭环测试。
 
 ## 产品预览
 
@@ -81,6 +84,7 @@ docs/
   ARCHITECTURE.md               架构边界与数据所有权
   EXTENDING.md                  新增 Tool、卡片、CRUD 和知识源指南
 scripts/                        安装、运行、状态和模板检查脚本
+fixtures/                       可重复的演示数据和黄金业务场景
 sql/mysql-init.sql              MySQL 8 完整初始化脚本和演示种子数据
 skills/
   manzhushaka-agent-template-builder/
@@ -155,7 +159,7 @@ pnpm db:seed
 pnpm dev
 ```
 
-该命令会同时启动 Chat、Console 和 AgentOS。管理员用户名为 `admin`，密码由 `.env` 中的 `ADMIN_INITIAL_PASSWORD` 设置。MySQL 初始化脚本不创建固定管理员凭据；执行 `pnpm db:seed` 后，会根据该配置生成 bcrypt 哈希并写入管理员账号。
+该命令会同时启动 Chat、Console、AgentOS 和知识索引 worker。管理员用户名为 `admin`，密码由 `.env` 中的 `ADMIN_INITIAL_PASSWORD` 设置。MySQL 初始化脚本不创建固定管理员凭据；执行 `pnpm db:seed` 后，会根据该配置生成 bcrypt 哈希并写入管理员账号。
 
 ## 日常开发
 
@@ -169,6 +173,13 @@ pnpm dev
 | `pnpm db:generate` | 根据 Drizzle schema 生成迁移 |
 | `pnpm db:migrate` | 执行数据库迁移 |
 | `pnpm db:seed` | 写入初始账号和演示数据 |
+| `pnpm demo:init -- --config business.yaml` | 根据业务配置确定性替换项目身份 |
+| `pnpm demo:add-feature -- --name <name> --type query\|action` | 创建一条待实现的业务纵切面清单 |
+| `pnpm demo:doctor` | 检查工具、配置和环境；加 `--live` 检查连接 |
+| `pnpm demo:reset -- --yes` | 恢复可重复的 Demo 数据和黄金场景 |
+| `pnpm test:integration` | 在临时数据库验证迁移、重置、知识 worker 和订单事务 |
+| `pnpm eval` / `pnpm eval:live` | 校验黄金场景或使用真实模型执行评测 |
+| `pnpm db:build-init` | 从 Drizzle 迁移和 fixture 生成初始化 SQL |
 | `pnpm check:placeholders` | 检查模板业务占位内容 |
 
 数据库 schema 变更后，推荐按以下顺序操作：
@@ -190,7 +201,7 @@ pnpm start
 pnpm status
 ```
 
-日志默认写入 `var/logs/app.log`，同时可以登录 Console 后在“智能体运营 / 在线日志”中按运行时、关键字和 `DEBUG`、`INFO`、`WARN`、`ERROR` 级别实时查看：
+日志默认写入 `var/logs/app.log`。启动命令同时运行 Chat、Console、AgentOS 和 Console 所有的知识索引 worker；可以登录 Console 后在“智能体运营 / 在线日志”中按运行时、关键字和 `DEBUG`、`INFO`、`WARN`、`ERROR` 级别实时查看：
 
 ```bash
 tail -f var/logs/app.log
@@ -222,7 +233,7 @@ pnpm stop
 - FastEmbed 默认使用 `BAAI/bge-small-zh-v1.5`，无需额外 Embedding API。
 - 新增 PDF、网页或其他知识来源时，应先把可审计正文和来源写入 MySQL，再触发向量重建。
 - Console 支持文件和公开网页导入，拒绝本机/内网网页、未知文件类型和超限内容。
-- 每次修改保存不可变版本快照；索引任务持久化记录状态、次数和失败原因。
+- 每次修改保存不可变版本快照；索引任务持久化记录状态、次数和失败原因，由独立 worker 自动消费并恢复中断任务。
 - 索引完成后可以在知识抽屉查看实际切片，向量本身不会返回浏览器。
 
 ## 运行监控与会话
@@ -249,6 +260,16 @@ pnpm stop
 4. 在 Chat 注册结构化卡片渲染器。
 5. 补齐正常路径、非法输入、空结果、鉴权、幂等和下游失败测试。
 
+创建新项目时，先复制并填写 `business.example.yaml`，再执行：
+
+```bash
+pnpm demo:init -- --config business.yaml --dry-run
+pnpm demo:init -- --config business.yaml
+pnpm config:check
+```
+
+`demo:init` 只做源码生成和确定性替换，生成项目仍然拥有普通、可编辑的业务源码，不会变成运行时低代码平台。
+
 源码中的 `EXTENSION:` 注释标记了模板项目常用的扩展位置，可以使用以下命令定位：
 
 ```bash
@@ -265,6 +286,8 @@ pnpm typecheck
 pnpm lint
 pnpm build
 pnpm check:placeholders
+pnpm eval
+pnpm e2e
 git diff --check
 ```
 
@@ -291,5 +314,7 @@ git diff --check
 ## 配套 Skill
 
 Skill 源码位于 `skills/manzhushaka-agent-template-builder/`，随模板仓库交付，不需要安装到全局 Skill 目录。它会从模板创建独立项目，完成业务访谈、同类产品研究、能力建议和中英文命名确认，再开始业务改造。
+
+业务范围与名称确认后，Skill 会生成 `business.yaml` 并调用 `demo:init`，而不是依赖自由文本全仓替换。查询类或操作类能力可以先用 `demo:add-feature` 建立受占位符检查约束的施工清单。
 
 Skill 不会在业务范围和名称确认前修改业务代码，也不会自动添加远程仓库或推送代码。只有用户明确要求时，才执行提交、推送、打标签或发布。

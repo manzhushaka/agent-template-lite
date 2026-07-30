@@ -32,13 +32,19 @@ AgentOS 负责真实模型、Session、Trace、Prompt、知识检索和 Tool 编
 - `KnowledgeStore`：LanceDB 与未来 Qdrant 实现的替换边界。
 - Console internal API：AgentOS 与业务状态机的唯一写入边界。
 
+`packages/shared` 的 Zod Schema 和 AgentOS 的 Pydantic Model 都会校验运行时数据，并共同执行 `packages/shared/contracts` 中的样例。TypeScript 接口本身不能替代边界校验。
+
 ## Chat 访客边界
 
 Chat 默认使用服务端签名的 HttpOnly 访客 Cookie，不把访客标识交给浏览器脚本管理。Console 维护访客与 Session 的归属；Chat BFF 在读取历史、发起 Run、继续确认、重命名和删除前都必须校验归属，并将可信 `user_id` 注入 AgentOS 请求。单机版本在 BFF 对模型 Run 做进程内限流；多节点部署时应将同一接口替换为共享限流存储。
 
 ## 知识导入与索引
 
-Console 在边界解析 PDF、HTML、Markdown、纯文本或公开网页，保存正文、来源哈希和不可变版本快照。保存请求只创建持久化索引任务；任务执行后全量重建 LanceDB，失败原因写回 MySQL 并允许人工重试。网页导入必须拒绝本机、内网、非 HTTP 协议和超限响应。
+Console 在边界解析 PDF、HTML、Markdown、纯文本或公开网页，保存正文、来源哈希和不可变版本快照。保存请求只创建持久化索引任务；Console 所有的独立 worker 在 AgentOS 就绪后消费任务并全量重建 LanceDB。更新状态时使用重建前的文档版本作为条件，避免并发编辑被旧任务标记为就绪；失败原因写回 MySQL 并允许人工重试。网页导入必须拒绝本机、内网、非 HTTP 协议和超限响应。
+
+## 项目生成边界
+
+`template.config.json` 是项目身份、Agent、端口、数据库和能力声明的事实源。`demo:init` 只在创建独立项目时生成和替换源码；生成后不存在动态插件加载或共享租户状态。`demo:add-feature` 创建显式的纵切面施工清单，未完成的 `SCAFFOLDED` 功能会被占位符检查拒绝交付。
 
 ## 可观测性
 

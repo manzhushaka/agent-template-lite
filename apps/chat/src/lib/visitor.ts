@@ -1,6 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { PROJECT_CONFIG } from "@template/shared";
 
-export const VISITOR_COOKIE = "agent_template_visitor";
+export const VISITOR_COOKIE = `${PROJECT_CONFIG.cookiePrefix}_visitor`;
 const MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
 
 function secret(): string {
