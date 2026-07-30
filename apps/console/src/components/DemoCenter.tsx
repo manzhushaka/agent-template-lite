@@ -1,6 +1,6 @@
 "use client";
 
-import { Boxes, ClipboardList, Plus, RefreshCw, Search, X } from "lucide-react";
+import { Plus, RefreshCw, Search, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import type { DemoOrder, DemoProduct } from "@template/shared";
 import { initialPagination, TablePagination } from "@/components/TablePagination";
@@ -22,8 +22,7 @@ const emptyProduct: Omit<DemoProduct, "id" | "updatedAt"> = {
  * Sample CRUD surface. EXTENSION: Reuse the filter/table/drawer interaction for another simple
  * resource, but move domain rules into a server-side service and validate every Route Handler.
  */
-export function DemoCenter() {
-  const [tab, setTab] = useState<"products" | "orders">("products");
+export function DemoCenter({ view }: { view: "products" | "orders" }) {
   const [products, setProducts] = useState<DemoProduct[]>([]);
   const [orders, setOrders] = useState<DemoOrder[]>([]);
   const [productPagination, setProductPagination] = useState(() => initialPagination());
@@ -96,6 +95,7 @@ export function DemoCenter() {
   );
 
   useEffect(() => {
+    if (view !== "products") return;
     const controller = new AbortController();
     const timer = window.setTimeout(
       () => void loadProducts(
@@ -109,16 +109,17 @@ export function DemoCenter() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [loadProducts, productPagination.page, productPagination.pageSize, query]);
+  }, [loadProducts, productPagination.page, productPagination.pageSize, query, view]);
 
   useEffect(() => {
+    if (view !== "orders") return;
     const controller = new AbortController();
     void loadOrders(
       { page: orderPagination.page, pageSize: orderPagination.pageSize },
       controller.signal,
     );
     return () => controller.abort();
-  }, [loadOrders, orderPagination.page, orderPagination.pageSize]);
+  }, [loadOrders, orderPagination.page, orderPagination.pageSize, view]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -175,15 +176,7 @@ export function DemoCenter() {
 
   return (
     <>
-      <div className="segmented-control">
-        <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>
-          <Boxes size={16} />商品数据
-        </button>
-        <button className={tab === "orders" ? "active" : ""} onClick={() => setTab("orders")}>
-          <ClipboardList size={16} />订单记录
-        </button>
-      </div>
-      {tab === "products" ? (
+      {view === "products" ? (
         <>
           <form className="filter-bar" onSubmit={(event) => event.preventDefault()}>
             <label>

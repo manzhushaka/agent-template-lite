@@ -14,6 +14,7 @@ from app.agent import AGENT_ID, build_agent
 from app.config import Settings
 from app.console_client import ConsoleClient
 from app.knowledge_store import KnowledgeDocument, LanceDbKnowledgeStore
+from app.observability import build_observability
 
 settings = Settings.from_env()
 logger = logging.getLogger(__name__)
@@ -103,6 +104,16 @@ def admin_overview() -> dict:
     }
 
 
+@base_app.get("/api/admin/observability", tags=["Admin"])
+def admin_observability(page: int = 1, page_size: int = 20) -> dict:
+    """Return sanitized operational metrics for the Console control plane."""
+    return build_observability(
+        agent_database,
+        page=max(1, page),
+        limit=max(1, min(page_size, 100)),
+    )
+
+
 @base_app.post("/api/admin/knowledge/reindex", tags=["Admin"])
 async def admin_reindex_knowledge() -> dict:
     try:
@@ -110,6 +121,13 @@ async def admin_reindex_knowledge() -> dict:
         return {"status": "ok", "indexedIds": indexed_ids, "count": len(indexed_ids)}
     except Exception as error:
         raise HTTPException(status_code=502, detail=f"知识索引失败：{type(error).__name__}") from error
+
+
+@base_app.get("/api/admin/knowledge/{document_id}/chunks", tags=["Admin"])
+def admin_knowledge_chunks(document_id: int) -> dict:
+    """Expose safe chunk previews for Console diagnostics."""
+    chunks = knowledge_store.document_chunks(document_id)
+    return {"documentId": document_id, "items": chunks, "count": len(chunks)}
 
 
 agent_os = AgentOS(

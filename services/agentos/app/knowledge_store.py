@@ -27,6 +27,8 @@ class KnowledgeStore(Protocol):
 
     def count_documents(self) -> int: ...
 
+    def document_chunks(self, document_id: int, limit: int = 100) -> list[dict[str, Any]]: ...
+
 
 def split_text(text: str, chunk_size: int = 700, overlap: int = 100) -> list[str]:
     """Split Chinese-friendly text by characters while retaining context across boundaries."""
@@ -119,3 +121,24 @@ class LanceDbKnowledgeStore:
             return 0
         rows = database.open_table(self.table_name).to_pandas(columns=["document_id"])
         return int(rows["document_id"].nunique())
+
+    def document_chunks(self, document_id: int, limit: int = 100) -> list[dict[str, Any]]:
+        """Return bounded chunk previews without exposing embedding vectors."""
+        database = lancedb.connect(str(self.uri))
+        if self.table_name not in database.table_names():
+            return []
+        rows = (
+            database.open_table(self.table_name)
+            .search()
+            .where(f"document_id = {int(document_id)}")
+            .limit(max(1, min(limit, 100)))
+            .to_list()
+        )
+        return [
+            {
+                "chunkId": item["chunk_id"],
+                "version": item["version"],
+                "content": item["content"],
+            }
+            for item in rows
+        ]

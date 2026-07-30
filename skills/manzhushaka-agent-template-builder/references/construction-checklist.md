@@ -15,6 +15,9 @@
 - [ ] MySQL stores title, source, content, status, version, and index status.
 - [ ] Only published documents enter LanceDB.
 - [ ] Reindex is safe to repeat and reports failures.
+- [ ] Imported files and web pages record source hash, immutable version and a retryable index job.
+- [ ] Web import rejects local/private addresses, unsupported MIME types and oversized bodies.
+- [ ] Console can inspect the latest index status, failure reason and chunk preview.
 - [ ] Knowledge facts are not invented by the Agent instructions.
 
 ## Comments and Handoff
@@ -24,3 +27,5 @@
 - [ ] New extension point has an `EXTENSION:` comment.
 - [ ] `docs/EXTENDING.md` explains the next developer's change path.
 - [ ] No secret or full personal data appears in logs or responses.
+- [ ] Chat session reads and mutations verify server-side visitor ownership.
+- [ ] Observability returns aggregates and masked visitor labels, not full prompts or identities.

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   activateBrowserSession,
   browserSessionId,
@@ -16,18 +16,17 @@ function memoryStorage() {
 }
 
 describe("browser session history", () => {
-  beforeEach(() => {
-    vi.stubGlobal("crypto", { randomUUID: vi.fn().mockReturnValueOnce("session-1").mockReturnValueOnce("session-2") });
-  });
-
   it("keeps the active session in a recent-first browser index", () => {
     const storage = memoryStorage();
-    expect(browserSessionId(storage)).toBe("session-1");
-    expect(resetBrowserSession(storage)).toBe("session-2");
-    expect(browserSessions(storage).map((session) => session.id)).toEqual(["session-2", "session-1"]);
+    const firstSessionId = browserSessionId(storage);
+    const secondSessionId = resetBrowserSession(storage);
+    expect(firstSessionId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(secondSessionId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(secondSessionId).not.toBe(firstSessionId);
+    expect(browserSessions(storage).map((session) => session.id)).toEqual([secondSessionId, firstSessionId]);
 
-    activateBrowserSession(storage, "session-1");
-    expect(browserSessionId(storage)).toBe("session-1");
+    activateBrowserSession(storage, firstSessionId);
+    expect(browserSessionId(storage)).toBe(firstSessionId);
   });
 
   it("updates a session without duplicating it and ignores malformed storage", () => {

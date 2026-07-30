@@ -22,6 +22,8 @@ AgentOS 负责真实模型、Session、Trace、Prompt、知识检索和 Tool 编
 | 知识元数据和正文 | Console | MySQL |
 | 知识向量和切片 | AgentOS | LanceDB |
 | Agent Session、Memory、Metrics、Eval | AgentOS | MySQL |
+| Chat 访客会话归属与标题 | Console | MySQL |
+| 知识版本与索引任务 | Console | MySQL |
 
 ## 关键合同
 
@@ -29,6 +31,20 @@ AgentOS 负责真实模型、Session、Trace、Prompt、知识检索和 Tool 编
 - `DemoCard`：Chat 可以渲染的业务卡片联合类型。
 - `KnowledgeStore`：LanceDB 与未来 Qdrant 实现的替换边界。
 - Console internal API：AgentOS 与业务状态机的唯一写入边界。
+
+## Chat 访客边界
+
+Chat 默认使用服务端签名的 HttpOnly 访客 Cookie，不把访客标识交给浏览器脚本管理。Console 维护访客与 Session 的归属；Chat BFF 在读取历史、发起 Run、继续确认、重命名和删除前都必须校验归属，并将可信 `user_id` 注入 AgentOS 请求。单机版本在 BFF 对模型 Run 做进程内限流；多节点部署时应将同一接口替换为共享限流存储。
+
+## 知识导入与索引
+
+Console 在边界解析 PDF、HTML、Markdown、纯文本或公开网页，保存正文、来源哈希和不可变版本快照。保存请求只创建持久化索引任务；任务执行后全量重建 LanceDB，失败原因写回 MySQL 并允许人工重试。网页导入必须拒绝本机、内网、非 HTTP 协议和超限响应。
+
+## 可观测性
+
+Session、Run、Token、Tool 和 Trace 继续以 AgentOS MySQL 表为事实源。Console 只通过受内部 Token 保护的汇总 API 展示脱敏指标，不复制完整 Prompt、模型响应、访客标识或推理内容。
+
+应用日志与业务审计、Agent 运行指标保持分离。开发和生产启动脚本把 Chat、Console、AgentOS 的标准输出汇总到 `var/logs/app.log`，Console 的登录态 API 仅有界读取文件尾部并在返回浏览器前再次脱敏。日志页面不直连其他运行时、不保存第二份日志数据，也不提供浏览器下载任意服务器文件的能力。
 
 ## 不做什么
 

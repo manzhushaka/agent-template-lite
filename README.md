@@ -13,6 +13,9 @@ Agent Template Lite 是一个用于构建独立业务 Agent Demo 的 Next.js 全
 - 基于 Agno AgentOS 的真实模型调用、Tools、Session、Trace 和知识检索。
 - MySQL 业务事实源与 LanceDB 向量索引分离，知识索引可以安全重建。
 - 有后果的 Tool 使用 Agno 原生确认，并由 Console 提供事务和幂等保证。
+- PDF、HTML、Markdown、纯文本和公开网页知识导入，具备版本、任务、失败重试与切片预览。
+- Agent Session、Run、Trace、Token、耗时、Tool 和异常观测，以及在线应用日志与可筛选审计日志。
+- 签名访客身份、服务端会话归属、会话重命名/删除和模型 Run 限流。
 - 配套项目构建 Skill，用于完成业务访谈、命名确认和模板改造。
 
 ## 产品预览
@@ -78,6 +81,7 @@ docs/
   ARCHITECTURE.md               架构边界与数据所有权
   EXTENDING.md                  新增 Tool、卡片、CRUD 和知识源指南
 scripts/                        安装、运行、状态和模板检查脚本
+sql/mysql-init.sql              MySQL 8 完整初始化脚本和演示种子数据
 skills/
   manzhushaka-agent-template-builder/
                                  配套业务项目构建 Skill
@@ -119,17 +123,26 @@ MYSQL_URL=mysql://agent_demo:your-password@127.0.0.1:3306/agent_demo
 AGENT_DATABASE_URL=mysql+pymysql://agent_demo:your-password@127.0.0.1:3306/agent_demo
 
 AUTH_SECRET=至少32位随机字符串
+CHAT_VISITOR_SECRET=Chat 访客 Cookie 使用的独立随机字符串
 INTERNAL_API_TOKEN=另一段独立随机字符串
-ADMIN_INITIAL_PASSWORD=首次登录使用的强密码
+ADMIN_INITIAL_PASSWORD=replace-with-a-strong-admin-password
 
 MODEL_NAME=your-model-name
 MODEL_BASE_URL=https://your-provider.example/v1
 MODEL_API_KEY=your-real-api-key
 ```
 
-`AUTH_SECRET` 和 `INTERNAL_API_TOKEN` 必须使用不同的随机值。不要把 `.env` 提交到 Git，也不要把真实密钥写回 `.env.example`。
+`AUTH_SECRET`、`CHAT_VISITOR_SECRET` 和 `INTERNAL_API_TOKEN` 应使用不同的随机值。为兼容已有本地环境，未配置 `CHAT_VISITOR_SECRET` 时 Chat 会使用 `AUTH_SECRET`，正式环境应单独配置。不要把 `.env` 提交到 Git，也不要把真实密钥写回 `.env.example`。
 
-3. 创建 `.env` 中指定的 MySQL 数据库和账号，然后初始化结构与演示数据：
+3. 为 `.env` 中的 MySQL 账号授予 `agent_demo` 数据库权限，然后任选一种方式初始化结构与演示数据。
+
+使用可直接交付的 MySQL 8 初始化脚本：
+
+```bash
+mysql -u root -p --default-character-set=utf8mb4 < sql/mysql-init.sql
+```
+
+或使用 Drizzle 迁移和 TypeScript seed：
 
 ```bash
 pnpm db:migrate
@@ -142,7 +155,7 @@ pnpm db:seed
 pnpm dev
 ```
 
-该命令会同时启动 Chat、Console 和 AgentOS。默认管理员用户名为 `admin`，初始密码来自 `.env` 的 `ADMIN_INITIAL_PASSWORD`；首次登录后应立即修改。
+该命令会同时启动 Chat、Console 和 AgentOS。管理员用户名为 `admin`，密码由 `.env` 中的 `ADMIN_INITIAL_PASSWORD` 设置。MySQL 初始化脚本不创建固定管理员凭据；执行 `pnpm db:seed` 后，会根据该配置生成 bcrypt 哈希并写入管理员账号。
 
 ## 日常开发
 
@@ -177,7 +190,7 @@ pnpm start
 pnpm status
 ```
 
-日志默认写入 `var/logs/app.log`：
+日志默认写入 `var/logs/app.log`，同时可以登录 Console 后在“智能体运营 / 在线日志”中按运行时、关键字和 `DEBUG`、`INFO`、`WARN`、`ERROR` 级别实时查看：
 
 ```bash
 tail -f var/logs/app.log
@@ -208,6 +221,17 @@ pnpm stop
 - LanceDB 保存从已发布文档重建的向量和切片，可以安全删除并重新生成。
 - FastEmbed 默认使用 `BAAI/bge-small-zh-v1.5`，无需额外 Embedding API。
 - 新增 PDF、网页或其他知识来源时，应先把可审计正文和来源写入 MySQL，再触发向量重建。
+- Console 支持文件和公开网页导入，拒绝本机/内网网页、未知文件类型和超限内容。
+- 每次修改保存不可变版本快照；索引任务持久化记录状态、次数和失败原因。
+- 索引完成后可以在知识抽屉查看实际切片，向量本身不会返回浏览器。
+
+## 运行监控与会话
+
+- Console 的“智能体运营 / 运行监控”展示 Session、Run、Trace、Token、耗时、异常率和 Tool 使用情况。
+- “智能体运营 / 在线日志”展示 Chat、Console 和 AgentOS 的当前运行输出，支持级别、运行时、关键字筛选和自动刷新；返回浏览器前会再次脱敏并限制读取窗口。
+- “治理中心 / 审计日志”支持按操作者、动作、资源和资源 ID 搜索。
+- Chat 使用签名 HttpOnly 访客 Cookie，Session 归属保存在 Console；历史读取和变更均经过服务端所有权校验。
+- 默认单机限流为每个访客/IP 每分钟 20 次 Agent Run。多节点部署时应替换为 Redis 等共享限流实现。
 
 ## 扩展业务
 

@@ -1,3 +1,5 @@
+import { createUuid } from "./uuid";
+
 const SESSION_KEY = "agent-template-session";
 const SESSION_HISTORY_KEY = "agent-template-session-history";
 const SESSION_HISTORY_LIMIT = 50;
@@ -57,7 +59,7 @@ export function browserSessionId(storage: SessionStorage): string {
     }
     return existing;
   }
-  const created = crypto.randomUUID();
+  const created = createUuid();
   activateBrowserSession(storage, created);
   rememberBrowserSession(storage, {
     id: created,
@@ -68,7 +70,7 @@ export function browserSessionId(storage: SessionStorage): string {
 }
 
 export function resetBrowserSession(storage: SessionStorage): string {
-  const created = crypto.randomUUID();
+  const created = createUuid();
   activateBrowserSession(storage, created);
   rememberBrowserSession(storage, {
     id: created,

@@ -60,6 +60,17 @@ button:focus-visible, textarea:focus-visible { outline: 0; box-shadow: 0 0 0 3px
 .session-history-list strong { overflow: hidden; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .session-history-list small { color: var(--vh-sub); font: 9px/1 var(--font-mono); }
 .session-history-list > p { margin: 10px; color: var(--vh-sub); font-size: 11px; }
+.session-row { position: relative; min-height: 44px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-radius: 8px; color: var(--vh-dim); }
+.session-row:hover { color: var(--vh-ink); background: var(--vh-surface-soft); }
+.session-row.active { color: var(--vh-primary-active); background: #fff1ec; }
+.session-open { min-width: 0; min-height: 44px; padding: 6px 5px 6px 10px; display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: center; gap: 9px; border: 0; color: inherit; background: transparent; text-align: left; }
+.session-open > span { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 7px; }
+.session-open strong { overflow: hidden; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.session-open small { color: var(--vh-sub); font: 9px/1 var(--font-mono); }
+.session-actions { display: none; padding-right: 4px; gap: 2px; }
+.session-row:hover .session-actions, .session-row:focus-within .session-actions { display: flex; }
+.session-actions button { width: 25px; height: 25px; display: grid; place-items: center; border: 0; border-radius: 6px; color: var(--vh-sub); background: transparent; }
+.session-actions button:hover { color: var(--vh-ink); background: var(--vh-canvas); }
 .sidebar-status { padding: 11px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--vh-border); border-radius: 8px; background: var(--vh-surface-soft); }
 .sidebar-status strong { font-size: 11px; }
 .sidebar-status small { margin-top: 3px; color: var(--vh-sub); font-size: 10px; }

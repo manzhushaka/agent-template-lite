@@ -5,7 +5,7 @@
   "packageManager": "pnpm@10.6.2",
   "scripts": {
     "setup": "bash scripts/setup.sh",
-    "dev": "dotenv -e .env -- concurrently --kill-others-on-fail --names chat,console,agentos --prefix-colors cyan,magenta,yellow \"pnpm --filter @template/chat dev\" \"pnpm --filter @template/console dev\" \"cd services/agentos && uv run python -m app.main\"",
+    "dev": "bash scripts/dev.sh",
     "build": "pnpm --filter @template/shared build && pnpm --filter @template/chat build && pnpm --filter @template/console build",
     "lint": "pnpm --filter @template/chat lint && pnpm --filter @template/console lint && cd services/agentos && uv run ruff check app tests",
     "typecheck": "pnpm --filter @template/shared typecheck && pnpm --filter @template/chat typecheck && pnpm --filter @template/console typecheck",

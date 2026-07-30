@@ -2,28 +2,23 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { BadgeDollarSign, Check, CircleAlert, CircleHelp, Gift, LoaderCircle, Menu, MessageSquare, MessageSquarePlus, PackageSearch, Send, X } from "lucide-react";
+import { BadgeDollarSign, Check, CircleAlert, CircleHelp, Gift, LoaderCircle, Menu, MessageSquare, MessageSquarePlus, PackageSearch, Pencil, Send, Trash2, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { TEMPLATE_AGENT_ID, type DemoCard } from "@template/shared";
 import { restoreConversation, type HistoricalApproval, type HistoricalTool } from "@/lib/chat-history";
 import { publicPath } from "@/lib/public-path";
-import {
-  activateBrowserSession,
-  browserSessionId,
-  browserSessions,
-  rememberBrowserSession,
-  resetBrowserSession,
-  type BrowserSessionSummary,
-} from "@/lib/session";
+import type { BrowserSessionSummary } from "@/lib/session";
 import { consumeSseStream } from "@/lib/sse";
 import { extractCards } from "@/lib/tool-results";
+import { createUuid } from "@/lib/uuid";
 
 type Message = { id: string; role: "user" | "assistant"; content: string; cards?: DemoCard[]; pending?: boolean; error?: boolean };
 type ConfirmationTool = HistoricalTool & { tool_call_id?: string };
 type Approval = HistoricalApproval;
 
 const apiBase = publicPath("/agent-api").replace(/\/$/, "");
+const sessionApi = publicPath("/api/chat/sessions").replace(/\/$/, "");
 const starterPrompts = [
   { label: "送礼推荐", prompt: "有哪些适合送人的商品？", icon: Gift },
   { label: "预算选品", prompt: "推荐一个 200 元以内的商品", icon: BadgeDollarSign },
@@ -37,7 +32,7 @@ function formBody(values: Record<string, unknown>): FormData {
 }
 
 function createMessage(role: Message["role"], content: string, extra: Partial<Message> = {}): Message {
-  return { id: crypto.randomUUID(), role, content, ...extra };
+  return { id: createUuid(), role, content, ...extra };
 }
 
 function welcomeMessage(content = "你好，我是 manzhushaka-agent。你可以直接描述需求，我会基于业务数据给出建议，并在执行有后果的操作前请你确认。"): Message[] {
@@ -111,12 +106,31 @@ export function ChatApp() {
   }, []);
 
   useEffect(() => {
-    const activeSessionId = browserSessionId(localStorage);
-    const storedSessions = browserSessions(localStorage);
-    setSessionId(activeSessionId);
-    setSessions(storedSessions);
-    setCurrentTitle(storedSessions.find((session) => session.id === activeSessionId)?.title || "当前会话");
-    void loadSession(activeSessionId);
+    async function initialize() {
+      setSessionLoading(true);
+      try {
+        const response = await fetch(publicPath("/api/chat/bootstrap"), { cache: "no-store" });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.message || "会话初始化失败");
+        let storedSessions = Array.isArray(body.sessions) ? body.sessions as BrowserSessionSummary[] : [];
+        if (!storedSessions.length) {
+          const createdResponse = await fetch(sessionApi, { method: "POST" });
+          const created = await createdResponse.json();
+          if (!createdResponse.ok) throw new Error(created.message || "会话创建失败");
+          storedSessions = [created];
+        }
+        const active = storedSessions[0];
+        setSessions(storedSessions);
+        setSessionId(active.id);
+        setCurrentTitle(active.title);
+        await loadSession(active.id);
+      } catch (initializeError) {
+        setMessages(welcomeMessage(`会话初始化失败：${(initializeError as Error).message}`));
+      } finally {
+        setSessionLoading(false);
+      }
+    }
+    void initialize();
     fetch(`${apiBase}/api/health`, { cache: "no-store" }).then((response) => setOnline(response.ok)).catch(() => setOnline(false));
   }, [loadSession]);
 
@@ -195,13 +209,16 @@ export function ChatApp() {
     const title = currentSession && !["新会话", "当前会话"].includes(currentSession.title)
       ? currentSession.title
       : sessionTitle(message);
-    const updatedSessions = rememberBrowserSession(localStorage, {
-      id: sessionId,
-      title,
-      updatedAt: new Date().toISOString(),
-    });
-    setSessions(updatedSessions);
+    const updatedAt = new Date().toISOString();
+    setSessions((current) => [{ id: sessionId, title, updatedAt }, ...current.filter((session) => session.id !== sessionId)]);
     setCurrentTitle(title);
+    if (title !== currentSession?.title) {
+      void fetch(`${sessionApi}/${encodeURIComponent(sessionId)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+    }
     setPending(true);
     try {
       await requestRun(`/agents/${TEMPLATE_AGENT_ID}/runs`, { message, session_id: sessionId });
@@ -233,17 +250,25 @@ export function ChatApp() {
     }
   }
 
-  function startNewSession() {
+  async function startNewSession() {
     if (pending) return;
-    const created = resetBrowserSession(localStorage);
-    ++historyRequestRef.current;
-    setSessionId(created);
-    setCurrentTitle("新会话");
-    setSessions(browserSessions(localStorage));
-    setSessionLoading(false);
-    setApproval(null);
-    setMessages(welcomeMessage("新会话已经开始。请告诉我这次想了解或办理什么。"));
-    setSidebarOpen(false);
+    setSessionLoading(true);
+    try {
+      const response = await fetch(sessionApi, { method: "POST" });
+      const created = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(created.message || "会话创建失败");
+      ++historyRequestRef.current;
+      setSessionId(created.id);
+      setCurrentTitle(created.title);
+      setSessions((current) => [created, ...current]);
+      setApproval(null);
+      setMessages(welcomeMessage("新会话已经开始。请告诉我这次想了解或办理什么。"));
+      setSidebarOpen(false);
+    } catch (createError) {
+      setMessages((current) => [...current, createMessage("assistant", `会话创建失败：${(createError as Error).message}`, { error: true })]);
+    } finally {
+      setSessionLoading(false);
+    }
   }
 
   function openSession(session: BrowserSessionSummary) {
@@ -251,11 +276,31 @@ export function ChatApp() {
       setSidebarOpen(false);
       return;
     }
-    activateBrowserSession(localStorage, session.id);
     setSessionId(session.id);
     setCurrentTitle(session.title);
     setSidebarOpen(false);
     void loadSession(session.id);
+  }
+
+  async function renameSession(session: BrowserSessionSummary) {
+    const title = window.prompt("新的会话名称", session.title)?.trim();
+    if (!title || title === session.title) return;
+    const response = await fetch(`${sessionApi}/${encodeURIComponent(session.id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ title }) });
+    if (!response.ok) return;
+    setSessions((current) => current.map((item) => item.id === session.id ? { ...item, title, updatedAt: new Date().toISOString() } : item));
+    if (session.id === sessionId) setCurrentTitle(title);
+  }
+
+  async function deleteSession(session: BrowserSessionSummary) {
+    if (!window.confirm(`删除会话“${session.title}”及其全部记录？`)) return;
+    const response = await fetch(`${sessionApi}/${encodeURIComponent(session.id)}`, { method: "DELETE" });
+    if (!response.ok) return;
+    const remaining = sessions.filter((item) => item.id !== session.id);
+    setSessions(remaining);
+    if (session.id === sessionId) {
+      if (remaining.length) openSession(remaining[0]);
+      else await startNewSession();
+    }
   }
 
   return <main className="chat-layout">
@@ -266,7 +311,7 @@ export function ChatApp() {
         <button className="icon-button sidebar-close" type="button" onClick={() => setSidebarOpen(false)} aria-label="关闭导航"><X size={19} /></button>
       </header>
 
-      <button className="new-chat-button" type="button" onClick={startNewSession} disabled={pending}><MessageSquarePlus size={17} />新建会话</button>
+      <button className="new-chat-button" type="button" onClick={() => void startNewSession()} disabled={pending}><MessageSquarePlus size={17} />新建会话</button>
 
       <nav className="sidebar-section" aria-label="常用对话">
         <p>常用对话</p>
@@ -276,17 +321,7 @@ export function ChatApp() {
       <section className="session-history" aria-label="历史会话">
         <header><span>历史会话</span>{sessionLoading && <LoaderCircle className="spin" size={13} aria-label="正在加载会话" />}</header>
         <div className="session-history-list">
-          {sessions.length ? sessions.map((session) => <button
-            className={session.id === sessionId ? "active" : ""}
-            type="button"
-            key={session.id}
-            disabled={pending}
-            onClick={() => openSession(session)}
-            aria-current={session.id === sessionId ? "page" : undefined}
-          >
-            <MessageSquare size={15} />
-            <span><strong>{session.title}</strong><small>{sessionTime(session.updatedAt)}</small></span>
-          </button>) : <p>暂无历史会话</p>}
+          {sessions.length ? sessions.map((session) => <div className={`session-row ${session.id === sessionId ? "active" : ""}`} key={session.id}><button className="session-open" type="button" disabled={pending} onClick={() => openSession(session)} aria-current={session.id === sessionId ? "page" : undefined}><MessageSquare size={15} /><span><strong>{session.title}</strong><small>{sessionTime(session.updatedAt)}</small></span></button><div className="session-actions"><button type="button" onClick={() => void renameSession(session)} title="重命名" aria-label={`重命名 ${session.title}`}><Pencil size={13} /></button><button type="button" onClick={() => void deleteSession(session)} title="删除" aria-label={`删除 ${session.title}`}><Trash2 size={13} /></button></div></div>) : <p>暂无历史会话</p>}
         </div>
       </section>
 
@@ -299,7 +334,7 @@ export function ChatApp() {
       <header className="chat-header">
         <button className="icon-button menu-button" type="button" onClick={() => setSidebarOpen(true)} aria-label="打开导航"><Menu size={20} /></button>
         <div className="conversation-title"><strong>{currentTitle}</strong><small><span className={`status-dot ${online ? "online" : ""}`} />{sessionId ? `会话 ${sessionId.slice(0, 8)}` : "正在建立会话"}</small></div>
-        <button className="icon-button" type="button" onClick={startNewSession} disabled={pending} title="新建会话" aria-label="新建会话"><MessageSquarePlus size={18} /></button>
+        <button className="icon-button" type="button" onClick={() => void startNewSession()} disabled={pending} title="新建会话" aria-label="新建会话"><MessageSquarePlus size={18} /></button>
       </header>
 
       <div className="message-list" ref={listRef}>
