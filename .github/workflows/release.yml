@@ -30,8 +30,8 @@ jobs:
           --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot"
           --health-interval=5s --health-timeout=5s --health-retries=20
     env:
-      MYSQL_URL: mysql://agent_demo:agent_demo@127.0.0.1:3306/agent_demo
-      AGENT_DATABASE_URL: mysql+pymysql://agent_demo:agent_demo@127.0.0.1:3306/agent_demo
+      MYSQL_URL: mysql://root:root@127.0.0.1:3306/agent_demo
+      AGENT_DATABASE_URL: mysql+pymysql://root:root@127.0.0.1:3306/agent_demo
       AUTH_SECRET: ci-auth-secret-at-least-32-characters
       CHAT_VISITOR_SECRET: ci-visitor-secret-at-least-32-characters
       INTERNAL_API_TOKEN: ci-internal-token-at-least-32-characters
