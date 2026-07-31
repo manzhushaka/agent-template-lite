@@ -1,0 +1,22 @@
+[Unit]
+Description=Agent Template knowledge index worker
+After=network-online.target agent-template-agentos.service agent-template-console.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=codex-ops
+Group=codex-ops
+WorkingDirectory=/home/app/agent-template/current/apps/console
+EnvironmentFile=/home/app/agent-template/shared/.env
+Environment=NODE_ENV=production
+Environment=PATH=/home/middleware/node/current/bin:/home/middleware/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/middleware/node/current/bin/node --import /home/app/agent-template/current/node_modules/tsx/dist/loader.mjs /home/app/agent-template/current/apps/console/scripts/knowledge-worker.ts
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

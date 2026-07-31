@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+release_id=${1:-}
+archive=${2:-}
+expected_checksum=${3:-}
+project_root=/home/app/agent-template
+incoming_root=/home/codex-ops/incoming
+releases_root=${project_root}/releases
+shared_root=${project_root}/shared
+current_link=${project_root}/current
+nginx_conf=/home/middleware/nginx/conf/conf.d/agent-template.locations.conf
+nginx_bin=/home/middleware/nginx/current/sbin/nginx
+nginx_config=/home/middleware/nginx/conf/nginx.conf
+units=(agent-template-agentos.service agent-template-chat.service agent-template-console.service agent-template-worker.service)
+
+fail() { echo "agent-template deploy error: $*" >&2; exit 1; }
+
+preflight() {
+  [[ ${EUID} -eq 0 ]] || fail "preflight must run as root"
+  [[ -x /home/middleware/node/current/bin/node ]] || fail "Node.js runtime is unavailable"
+  [[ -x /home/middleware/bin/uv ]] || fail "uv runtime is unavailable"
+  [[ -x ${nginx_bin} ]] || fail "Nginx runtime is unavailable"
+  [[ -d ${incoming_root} && -w ${incoming_root} ]] || fail "incoming directory is unavailable"
+  [[ -f ${shared_root}/.env ]] || fail "production environment file is missing"
+  [[ $(stat -c '%a' "${shared_root}/.env") != *[1-9] ]] || fail "production environment file is world-readable"
+  [[ -d ${shared_root}/var ]] || fail "persistent shared directory is missing"
+  for unit in "${units[@]}"; do
+    systemctl cat "${unit}" >/dev/null 2>&1 || fail "missing systemd unit: ${unit}"
+  done
+  [[ -f ${nginx_conf} ]] || fail "missing Nginx include: ${nginx_conf}"
+  ${nginx_bin} -t -c "${nginx_config}" >/dev/null 2>&1 || fail "Nginx configuration is invalid"
+  available_mib=$(df -Pm /home/app | awk 'NR == 2 { print $4 }')
+  [[ ${available_mib} =~ ^[0-9]+$ && ${available_mib} -ge 2048 ]] || fail "insufficient release filesystem space"
+  echo "Preflight current release: $(readlink -f "${current_link}" 2>/dev/null || echo none); free=${available_mib}MiB"
+  for unit in "${units[@]}"; do
+    systemctl is-active --quiet "${unit}" && echo "Preflight ${unit}: active" || echo "Preflight ${unit}: inactive"
+  done
+}
+
+if [[ ${release_id} == --preflight ]]; then
+  preflight
+  exit 0
+fi
+
+[[ ${EUID} -eq 0 ]] || fail "must run as root"
+[[ ${release_id} =~ ^v[0-9A-Za-z._-]+$ ]] || fail "invalid release id"
+[[ ${expected_checksum} =~ ^[0-9a-f]{64}$ ]] || fail "invalid checksum"
+archive_path=$(realpath -e "${archive}") || fail "archive does not exist"
+[[ ${archive_path} == ${incoming_root}/* ]] || fail "archive is outside incoming directory"
+[[ $(sha256sum "${archive_path}" | awk '{print $1}') == ${expected_checksum} ]] || fail "archive checksum mismatch"
+
+while IFS= read -r entry; do
+  [[ ${entry} != /* ]] || fail "archive contains an absolute path"
+  case "/${entry}/" in */../*) fail "archive contains a parent-directory path" ;; esac
+done < <(tar -tzf "${archive_path}")
+if tar -tvzf "${archive_path}" | awk '$1 ~ /^[lh]/ { found=1 } END { exit found ? 0 : 1 }'; then
+  fail "archive contains symbolic or hard links"
+fi
+
+install -d -o codex-ops -g codex-ops -m 0755 "${releases_root}" "${shared_root}/var/lancedb" "${shared_root}/logs"
+release_dir=${releases_root}/${release_id}
+old_target=$(readlink -f "${current_link}" 2>/dev/null || true)
+old_nginx_backup=$(mktemp)
+old_nginx_exists=false
+if [[ -f ${nginx_conf} ]]; then
+  cp -p "${nginx_conf}" "${old_nginx_backup}"
+  old_nginx_exists=true
+fi
+cleanup() { rm -f "${old_nginx_backup}"; }
+trap cleanup EXIT
+
+if [[ -e ${release_dir} ]]; then
+  [[ $(cat "${release_dir}/.release-sha256" 2>/dev/null || true) == ${expected_checksum} ]] || fail "release id already exists with different content"
+else
+  temp_dir=${releases_root}/.${release_id}.incoming.$$
+  install -d -o codex-ops -g codex-ops -m 0755 "${temp_dir}"
+  tar --no-same-owner --no-same-permissions -xzf "${archive_path}" -C "${temp_dir}"
+  printf '%s\n' "${expected_checksum}" > "${temp_dir}/.release-sha256"
+  chown -R codex-ops:codex-ops "${temp_dir}"
+  mv "${temp_dir}" "${release_dir}"
+fi
+
+if [[ ! -x ${shared_root}/venv/bin/uvicorn ]]; then
+  UV_PROJECT_ENVIRONMENT="${shared_root}/venv" /home/middleware/bin/uv sync --frozen --no-dev --project "${release_dir}/services/agentos"
+fi
+[[ -f ${release_dir}/node_modules/tsx/dist/loader.mjs ]] || fail "worker runtime is missing tsx"
+[[ -f ${release_dir}/node_modules/tsx/node_modules/esbuild/bin/esbuild ]] || fail "worker runtime is missing esbuild"
+[[ -d ${release_dir}/node_modules/tsx/node_modules/@esbuild ]] || fail "worker runtime is missing esbuild native package"
+[[ -f ${release_dir}/apps/console/node_modules/drizzle-orm/package.json ]] || fail "worker runtime is missing drizzle-orm"
+[[ -f ${release_dir}/apps/console/node_modules/mysql2/package.json ]] || fail "worker runtime is missing mysql2"
+[[ -f ${release_dir}/apps/console/node_modules/@template/shared/package.json ]] || fail "worker runtime is missing shared package"
+
+for unit in "${units[@]}"; do
+  install -o root -g root -m 0644 "${release_dir}/deploy/${unit}" "/etc/systemd/system/${unit}"
+done
+install -o root -g root -m 0644 "${release_dir}/deploy/agent-template.locations.conf" "${nginx_conf}"
+${nginx_bin} -t -c "${nginx_config}" >/dev/null 2>&1 || fail "Nginx configuration is invalid"
+systemctl daemon-reload
+ln -sfn "${release_dir}" "${project_root}/current.next"
+mv -Tf "${project_root}/current.next" "${current_link}"
+
+restart_units() {
+  systemctl enable "${units[@]}" >/dev/null
+  systemctl restart agent-template-agentos.service
+  systemctl restart agent-template-console.service agent-template-chat.service agent-template-worker.service
+}
+restart_units
+
+healthy=false
+for _attempt in $(seq 1 30); do
+  if systemctl is-active --quiet "${units[0]}" && systemctl is-active --quiet "${units[1]}" && systemctl is-active --quiet "${units[2]}" && systemctl is-active --quiet "${units[3]}" \
+    && curl --fail --silent --show-error --connect-timeout 2 --max-time 5 http://127.0.0.1:8000/api/health >/dev/null \
+    && curl --fail --silent --show-error --location --connect-timeout 2 --max-time 5 http://127.0.0.1:3000/gateway/agent-template/chat/ >/dev/null \
+    && curl --fail --silent --show-error --location --connect-timeout 2 --max-time 5 http://127.0.0.1:3001/gateway/agent-template/console/api/health >/dev/null; then
+    healthy=true
+    break
+  fi
+  sleep 3
+done
+
+if [[ ${healthy} != true ]]; then
+  echo "Health check failed; restoring previous release." >&2
+  systemctl stop "${units[@]}" || true
+  if [[ -n ${old_target} && -d ${old_target} ]]; then
+    ln -sfn "${old_target}" "${project_root}/current.next"
+    mv -Tf "${project_root}/current.next" "${current_link}"
+    if [[ ${old_nginx_exists} == true ]]; then
+      install -o root -g root -m 0644 "${old_nginx_backup}" "${nginx_conf}"
+    fi
+    ${nginx_bin} -t -c "${nginx_config}" >/dev/null 2>&1 && systemctl reload nginx-home-gateway.service || true
+    systemctl start "${units[@]}" || true
+  else
+    rm -f "${current_link}"
+    if [[ ${old_nginx_exists} == true ]]; then install -o root -g root -m 0644 "${old_nginx_backup}" "${nginx_conf}"; else rm -f "${nginx_conf}"; fi
+    ${nginx_bin} -t -c "${nginx_config}" >/dev/null 2>&1 && systemctl reload nginx-home-gateway.service || true
+  fi
+  fail "release health checks failed"
+fi
+
+${nginx_bin} -t -c "${nginx_config}" >/dev/null 2>&1 && systemctl reload nginx-home-gateway.service
+printf 'RELEASE_ID=%s\n' "${release_id}" > "${shared_root}/release.env"
+printf 'DEPLOYED_AT=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${shared_root}/release.env"
+chown codex-ops:codex-ops "${shared_root}/release.env"
+chmod 0640 "${shared_root}/release.env"
+printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "${release_dir}/.deployed-at"
+chown codex-ops:codex-ops "${release_dir}/.deployed-at"
+rm -f "${archive_path}"
+echo "Deployed agent-template ${release_id}; current=$(readlink -f "${current_link}")"

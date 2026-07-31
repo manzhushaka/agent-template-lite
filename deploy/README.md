@@ -1,22 +1,26 @@
-# Deployment Skeleton
+# Agent Template Deployment
 
-The Builder Skill replaces `agent-template-lite` in service names and paths after project naming is confirmed. Keep the three services on loopback and expose only Nginx routes.
+The production project name is `agent-template`. Keep Chat, Console, AgentOS and the
+knowledge worker on loopback and expose only the Nginx routes in
+`agent-template.locations.conf`.
 
 Runtime layout:
 
 ```text
-/home/app/<project>/current/
-/home/app/<project>/releases/<version>/
-/home/app/<project>/shared/.env
-/home/app/<project>/shared/var/lancedb/
+/home/app/agent-template/current/
+/home/app/agent-template/releases/<version>/
+/home/app/agent-template/shared/.env
+/home/app/agent-template/shared/var/lancedb/
 ```
 
 Before a real deployment:
 
 1. Install Node.js, pnpm, Python, uv, MySQL and Nginx on the application host.
-2. Put real secrets in `shared/.env` with mode `0640` or stricter.
-3. Build Chat and Console with the same base-path variables used by Nginx.
-4. Preserve `shared/var/lancedb`, MySQL data, logs and the shared environment across releases.
-5. Verify `/api/health` for all three services before switching `current`.
+2. Put the development-equivalent environment in `shared/.env` with mode `0640` or stricter.
+3. Build Chat and Console with `/gateway/agent-template/chat` and
+   `/gateway/agent-template/console` as their base paths.
+4. Preserve `shared/var/lancedb`, logs and the shared environment across releases.
+5. Verify all four loopback services before switching `current`.
 
-This directory is a deployment skeleton, not proof of a live release. The application host, ports, routes and credentials must be checked per generated project.
+The release workflow installs the files in this directory on the physical application host.
+ECS remains the public Nginx/FRP edge and does not run the application.

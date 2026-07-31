@@ -1,0 +1,16 @@
+package.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
+apps/chat/package.json
+apps/console/package.json
+apps/console/tsconfig.json
+packages/shared/package.json
+deploy/agent-template-agentos.service
+deploy/agent-template-chat.service
+deploy/agent-template-console.service
+deploy/agent-template-worker.service
+deploy/agent-template.locations.conf
+deploy/agent-template-release.sudoers
+deploy/agent-template-deploy
+services/agentos/pyproject.toml
+services/agentos/uv.lock

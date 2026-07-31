@@ -1,0 +1,21 @@
+[Unit]
+Description=Agent Template AgentOS
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=codex-ops
+Group=codex-ops
+WorkingDirectory=/home/app/agent-template/current/services/agentos
+EnvironmentFile=/home/app/agent-template/shared/.env
+Environment=PATH=/home/middleware/node/current/bin:/home/middleware/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/app/agent-template/shared/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

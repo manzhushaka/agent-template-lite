@@ -1,0 +1,87 @@
+name: Release agent-template
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: production-agent-template
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: agent_demo
+          MYSQL_USER: agent_demo
+          MYSQL_PASSWORD: agent_demo
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      MYSQL_URL: mysql://agent_demo:agent_demo@127.0.0.1:3306/agent_demo
+      AGENT_DATABASE_URL: mysql+pymysql://agent_demo:agent_demo@127.0.0.1:3306/agent_demo
+      AUTH_SECRET: ci-auth-secret-at-least-32-characters
+      CHAT_VISITOR_SECRET: ci-visitor-secret-at-least-32-characters
+      INTERNAL_API_TOKEN: ci-internal-token-at-least-32-characters
+      ADMIN_INITIAL_PASSWORD: ci-admin-password
+      MODEL_NAME: ci-model
+      MODEL_BASE_URL: http://127.0.0.1:18000/v1
+      MODEL_API_KEY: ci-model-key
+      RUN_DB_INTEGRATION: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.6.2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          (cd services/agentos && uv sync --frozen)
+      - name: Verify application
+        run: |
+          pnpm db:migrate
+          pnpm db:seed
+          pnpm test:integration
+          pnpm test
+          pnpm typecheck
+          pnpm lint
+          pnpm check:placeholders
+          pnpm eval
+      - name: Build and package
+        run: |
+          .release/preflight.sh local
+          .release/build.sh
+          .release/preflight.sh local --artifact .release/out/release.tar.gz
+      - name: Deploy through ECS and FRP
+        env:
+          DEPLOY_ECS_HOST: ${{ secrets.DEPLOY_ECS_HOST }}
+          DEPLOY_ECS_USER: ${{ secrets.DEPLOY_ECS_USER }}
+          DEPLOY_ECS_SSH_KEY: ${{ secrets.DEPLOY_ECS_SSH_KEY }}
+          DEPLOY_HOME_SSH_KEY: ${{ secrets.DEPLOY_HOME_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: .release/publish.sh "${GITHUB_REF_NAME}"
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            .release/out/release.tar.gz \
+            .release/out/release.tar.gz.sha256 \
+            .release/out/release-manifest.txt \
+            .release/out/release-manifest.txt.sha256 \
+            --verify-tag --generate-notes --title "${GITHUB_REF_NAME}"

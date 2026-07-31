@@ -15,3 +15,5 @@ services/agentos/.venv/
 services/agentos/data/
 test-results/
 playwright-report/
+.release/out/
+.release/work/
